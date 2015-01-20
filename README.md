@@ -1,10 +1,16 @@
 # pfi
 Python File Info - Tool to gather information on PE and other files. 
 
+Dependencies
+-----
+
+ * pefile >= 1.2.10-139 - https://code.google.com/p/pefile/ 
+ 
+
 Usage
 -----
 
-usage: pfi.py [-h] [-i] [-s] file
+pfi.py [-h] [-i] [-s] file
 
 Show information about a file.
 
