@@ -2,16 +2,17 @@
 
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 """
  --- History ---
 
   1.19.2015 - Initial Revision 
-  1.20.2014 - Fixed import issues and minor bugs
+  1.20.2015 - Fixed import issues and minor bugs
             - Added sha256 to default output
             - Updated Stringtable info
             - Fixed default display
+  1.21.2015 - Fixed output issue with VarOutputInfo 
   
 
 """
@@ -85,23 +86,37 @@ class FileInfo:
     
     def getstringentries(self):
         versioninfo = {}
+        varfileinfo = {}
+        stringfileinfo = {}
         if self.pe is not None:
             try:                
                 for t in self.pe.FileInfo:
                     if t.name == 'VarFileInfo':
                         for vardata in t.Var:
-                            for key in vardata.entry:
-                                versioninfo[key] = vardata.entry[key]
+                            for key in vardata.entry:   
+                                try:
+                                    varfileinfo[key] = vardata.entry[key]                                                               
+                                    tparms = vardata.entry[key].split(' ')                                    
+                                    varfileinfo['LangID'] = tparms[0]
+                                    #TODO: Fix this...this is terrible
+                                    varfileinfo['charsetID'] = str(int(tparms[1],16))
+                                except Exception as e: 
+                                    print e
+                                    
                     elif t.name == 'StringFileInfo':
                         for vdata in t.StringTable:
                             for key in vdata.entries:
-                                versioninfo[key] = vdata.entries[key]
+                                stringfileinfo[key] = vdata.entries[key]
                     else:
                         versioninfo['unknown'] = 'unknown'
             except AttributeError as ae:
                 versioninfo['Error'] = ae
         else:
             versioninfo['Error'] = 'Not a PE file.'
+        
+        versioninfo["VarInfo"] = varfileinfo 
+        versioninfo["StringInfo"] = stringfileinfo
+        
         return versioninfo 
         
     def listimports(self):
@@ -161,11 +176,20 @@ class FileInfo:
             hinfo = self.getheaderinfo()
             for str_key in hinfo:
                 fobj += ' {:<16} {}\n'.format(str_key,hinfo[str_key])
-            fobj += "\n---- Version Info ----  \n\n"
             
+            #outoput the version info blocks.
+            fobj += "\n---- Version Info ----  \n\n"            
             versioninfo = self.getstringentries()
-            for str_entry in versioninfo:
-                fobj += ' {:<16} {}\n'.format(str_entry,versioninfo[str_entry])
+
+            if 'StringInfo' in versioninfo:                
+                sinfo = versioninfo['StringInfo']
+                for str_entry in sinfo:                
+                    fobj += ' {:<16} {}\n'.format(str_entry,sinfo[str_entry].encode('utf-8'))
+            if 'VarInfo' in versioninfo:      
+                fobj += "\n"
+                vinfo = versioninfo['VarInfo']
+                for str_entry in vinfo:                
+                    fobj += ' {:<16} {}\n'.format(str_entry,vinfo[str_entry].encode('utf-8'))
         return fobj
         
 
