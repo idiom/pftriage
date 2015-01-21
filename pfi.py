@@ -2,7 +2,7 @@
 
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 """
  --- History ---
@@ -10,6 +10,8 @@ __version__ = '0.0.2'
   1.19.2015 - Initial Revision 
   1.20.2014 - Fixed import issues and minor bugs
             - Added sha256 to default output
+            - Updated Stringtable info
+            - Fixed default display
   
 
 """
@@ -82,14 +84,26 @@ class FileInfo:
             return ihash
     
     def getstringentries(self):
+        versioninfo = {}
         if self.pe is not None:
-            try:
-                return self.pe.FileInfo[1].StringTable[0].entries.items()
+            try:                
+                for t in self.pe.FileInfo:
+                    if t.name == 'VarFileInfo':
+                        for vardata in t.Var:
+                            for key in vardata.entry:
+                                versioninfo[key] = vardata.entry[key]
+                    elif t.name == 'StringFileInfo':
+                        for vdata in t.StringTable:
+                            for key in vdata.entries:
+                                versioninfo[key] = vdata.entries[key]
+                    else:
+                        versioninfo['unknown'] = 'unknown'
             except AttributeError as ae:
-                return[('Error','StringTable not found...')]
+                versioninfo['Error'] = ae
         else:
-            return 'Skipped...'
-            
+            versioninfo['Error'] = 'Not a PE file.'
+        return versioninfo 
+        
     def listimports(self):
         modules = {}
         if self.pe is not None:
@@ -132,24 +146,26 @@ class FileInfo:
         fobj = "\n\n"
         fobj += "---- File Summary ----\n"
         fobj += "\n"
-        fobj += " Filename:    %s  \n" % self.filename
-        fobj += " Magic Type:  %s  \n" % self.gettype()
-        fobj += " Size:        %s  \n" % self.filesize
-        fobj += " First Bytes: %s  \n" % self.getbytes(0,16)
-        fobj += " MD5:         %s  \n" % self.gethash('md5')
-        fobj += " SHA1:        %s  \n" % self.gethash('sha1')
-        fobj += " SHA256:        %s  \n" % self.gethash('sha256')
-        fobj += " Import Hash: %s  \n" % self.getimphash()
-        fobj += " ssdeep:      %s  \n" % self.getfuzzyhash()
+        fobj += ' {:<16} {}\n'.format("Filename",self.filename)
+        fobj += ' {:<16} {}\n'.format("Magic Type",self.gettype())
+        fobj += ' {:<16} {}\n'.format("Size", self.filesize)
+        fobj += ' {:<16} {}\n'.format("First Bytes",self.getbytes(0,16))
+        fobj += ' {:<16} {}\n'.format("MD5",self.gethash('md5'))
+        fobj += ' {:<16} {}\n'.format("SHA1",self.gethash('sha1'))
+        fobj += ' {:<16} {}\n'.format("SHA256",self.gethash('sha256'))
+        fobj += ' {:<16} {}\n'.format("Import Hash",self.getimphash())
+        fobj += ' {:<16} {}\n'.format("ssdeep",self.getfuzzyhash())
         if self.pe is not None:
-            fobj += " Packed:      %s  \n" % peutils.is_probably_packed(self.pe)
+            fobj += ' {:<16} {}\n'.format("Packed",peutils.is_probably_packed(self.pe))
 
             hinfo = self.getheaderinfo()
             for str_key in hinfo:
-                fobj += " %s: %s \n" %(str_key,hinfo[str_key])
-            fobj += "\n ---- Assembly Info ----  \n\n"
-            for str_entry in self.getstringentries():
-                fobj += "  %s: %s \n" %(str_entry[0],str_entry[1])
+                fobj += ' {:<16} {}\n'.format(str_key,hinfo[str_key])
+            fobj += "\n---- Version Info ----  \n\n"
+            
+            versioninfo = self.getstringentries()
+            for str_entry in versioninfo:
+                fobj += ' {:<16} {}\n'.format(str_entry,versioninfo[str_entry])
         return fobj
         
 
@@ -173,10 +189,10 @@ def print_imports(modules):
 def print_sections(sections):
     sdata = "\n ---- Sections ----  \n"
     for section in sections:
-        sdata += ' Name:            %s \n' % section.Name
-        sdata += ' VirtualAddress:  %s \n' % hex(section.VirtualAddress)
-        sdata += ' SizeOfRawData:   %s \n' % section.SizeOfRawData
-        sdata += ' MD5:             %s \n' % hashlib.md5(section.get_data()).hexdigest()
+        sdata += ' {:<16} {}\n'.format('Name:',section.Name)
+        sdata += ' {:<16} {}\n'.format('VirtualAddress:',hex(section.VirtualAddress))
+        sdata += ' {:<16} {}\n'.format('SizeOfRawData:',section.SizeOfRawData)
+        sdata += ' {:<16} {}\n'.format('MD5:',hashlib.md5(section.get_data()).hexdigest())
         sdata += '\n\n'
         
     print sdata
