@@ -143,6 +143,9 @@ class FileInfo:
         return bstr
         
     def __repr__(self):
+        print self.pe.dump_info()
+        print pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
+        #print hex(self.pe.FILE_HEADER.Characteristics)
         fobj = "\n\n"
         fobj += "---- File Summary ----\n"
         fobj += "\n"
@@ -161,8 +164,13 @@ class FileInfo:
             hinfo = self.getheaderinfo()
             for str_key in hinfo:
                 fobj += ' {:<16} {}\n'.format(str_key,hinfo[str_key])
-            fobj += "\n---- Version Info ----  \n\n"
+            flags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
             
+            fobj += ' {:<16} '.format("Flags")
+            for flag in flags:
+                fobj += flag[0] + ' ' 
+            
+            fobj += "\n\n---- Version Info ----  \n\n"
             versioninfo = self.getstringentries()
             for str_entry in versioninfo:
                 fobj += ' {:<16} {}\n'.format(str_entry,versioninfo[str_entry])
