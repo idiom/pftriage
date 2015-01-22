@@ -14,6 +14,7 @@ __version__ = '0.0.5'
             - Fixed default display
   1.21.2015 - Fixed output issue with VarOutputInfo 
             - Moved VersionInfo from default output
+  1.22.2015 - Minor updates.
   
 """
 
@@ -52,52 +53,52 @@ class FileInfo:
     
     #https://msdn.microsoft.com/en-us/library/aa381057.aspx
     langID = {
-        0x0000:	"Unknown",
-        0x0401:	"Arabic",
-        0x0402: "Bulgarian",	
+        0x0000: "Unknown",
+        0x0401: "Arabic",
+        0x0402: "Bulgarian",    
         0x0403: "Catalan",
-        0x0404:	"Traditional Chinese",
-        0x0405:	"Czech",
-        0x0406:	"Danish",	
-        0x0407: "German",	
-        0x0408:	"Greek",	
-        0x0409:	"U.S. English",	
-        0x040A:	"Castilian Spanish",	
-        0x040B:	"Finnish",
-        0x040C:	"French",	
-        0x040D:	"Hebrew",	
-        0x040E:	"Hungarian",	
-        0x040F:	"Icelandic",	
-        0x0410:	"Italian",	
-        0x0411:	"Japanese",	
-        0x0412:	"Korean",	
-        0x0413:	"Dutch",	
-        0x0414:	"Norwegian - Bokmal",	
-        0x0415:	"Polish",
-        0x0416:	"Portuguese (Brazil)",
-        0x0417:	"Rhaeto-Romanic",
-        0x0418:	"Romanian",
-        0x0419:	"Russian",
-        0x041A:	"Croato-Serbian (Latin)",
-        0x041B:	"Slovak",
-        0x041C:	"Albanian",
-        0x041D:	"Swedish",
-        0x041E:	"Thai",
-        0x041F:	"Turkish",
-        0x0420:	"Urdu",
-        0x0421:	"Bahasa",
-        0x0804:	"Simplified Chinese",
-        0x0807:	"Swiss German",
-        0x0809:	"U.K. English",
-        0x080A:	"Spanish (Mexico)",
-        0x080C:	"Belgian French",
-        0x0C0C:	"Canadian French",
-        0x100C:	"Swiss French",
-        0x0810:	"Swiss Italian",	
-        0x0813:	"Belgian Dutch",	
-        0x0814:	"Norwegian - Nynorsk",
-        0x0816:	"Portuguese (Portugal)",
-        0x081A:	"Serbo-Croatian (Cyrillic)"
+        0x0404: "Traditional Chinese",
+        0x0405: "Czech",
+        0x0406: "Danish",   
+        0x0407: "German",   
+        0x0408: "Greek",    
+        0x0409: "U.S. English", 
+        0x040A: "Castilian Spanish",    
+        0x040B: "Finnish",
+        0x040C: "French",   
+        0x040D: "Hebrew",   
+        0x040E: "Hungarian",    
+        0x040F: "Icelandic",    
+        0x0410: "Italian",  
+        0x0411: "Japanese", 
+        0x0412: "Korean",   
+        0x0413: "Dutch",    
+        0x0414: "Norwegian - Bokmal",   
+        0x0415: "Polish",
+        0x0416: "Portuguese (Brazil)",
+        0x0417: "Rhaeto-Romanic",
+        0x0418: "Romanian",
+        0x0419: "Russian",
+        0x041A: "Croato-Serbian (Latin)",
+        0x041B: "Slovak",
+        0x041C: "Albanian",
+        0x041D: "Swedish",
+        0x041E: "Thai",
+        0x041F: "Turkish",
+        0x0420: "Urdu",
+        0x0421: "Bahasa",
+        0x0804: "Simplified Chinese",
+        0x0807: "Swiss German",
+        0x0809: "U.K. English",
+        0x080A: "Spanish (Mexico)",
+        0x080C: "Belgian French",
+        0x0C0C: "Canadian French",
+        0x100C: "Swiss French",
+        0x0810: "Swiss Italian",    
+        0x0813: "Belgian Dutch",    
+        0x0814: "Norwegian - Nynorsk",
+        0x0816: "Portuguese (Portugal)",
+        0x081A: "Serbo-Croatian (Cyrillic)"
        
     }
     
@@ -305,9 +306,9 @@ def print_sections(sections):
 def main():
     parser = argparse.ArgumentParser(description="Show information about a file.")
     parser.add_argument("file", help="The target file+.")    
-    parser.add_argument('-i','--imports',dest='imports',action='store_true',help="Display import tree")  
-    parser.add_argument('-s','--sections',dest='sections',action='store_true',help="Display section information")
-    parser.add_argument('-v','--versioninfo',dest='version',action='store_true',help="Display section information")  
+    parser.add_argument('-i','--imports',dest='imports',action='store_true',help="Display Import Tree")  
+    parser.add_argument('-s','--sections',dest='sections',action='store_true',help="Display File Section Summary")
+    parser.add_argument('-v','--versioninfo',dest='version',action='store_true',help="Display File VersionInfo")  
     
     args = parser.parse_args()
     
