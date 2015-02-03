@@ -14,10 +14,12 @@ __version__ = '0.0.6'
             - Fixed default display
   1.21.2015 - Fixed output issue with VarOutputInfo 
             - Moved VersionInfo from default output
+  1.22.2015 - Minor updates.
   2.01.2015 - Added resources 
             - Added option to extract resource data by passing an rva_offset or 'ALL'
-            -
-            
+            - Updated section output
+
+
 """
 
 
@@ -83,9 +85,9 @@ class FileInfo:
     
     #https://msdn.microsoft.com/en-us/library/aa381057.aspx
     langID = {
-        0x0000:	"Unknown",
-        0x0401:	"Arabic",
-        0x0402: "Bulgarian",	
+        0x0000: "Unknown",
+        0x0401: "Arabic",
+        0x0402: "Bulgarian",    
         0x0403: "Catalan",
         0x0404:	"Traditional Chinese",
         0x0405:	"Czech",
@@ -533,6 +535,7 @@ def main():
     parser.add_argument('-v','--versioninfo',dest='version',action='store_true',help="Display section information")
     parser.add_argument('-r','--resources',dest='resources',action='store_true',help="Display resource information")
     parser.add_argument('-D','--Dump',nargs=1,dest='dump_offset',help="Dump data using the passed offset or 'ALL'.\nCurrently only works with resources.")  
+
     
     args = parser.parse_args()
     print '[*] Loading File...'
