@@ -17,15 +17,15 @@ Show information about a file.
 positional arguments:  
   file            The target file.  
   
-optional arguments: 
-  -h, --help            show this help message and exit 
-  -i, --imports         Display import tree 
-  -s, --sections        Display section information 
-  -v, --versioninfo     Display section information 
-  -r, --resources       Display resource information 
-  -D DUMP_OFFSET, --Dump DUMP_OFFSET 
-                        Dump data using the passed offset or 'ALL'. 
-                        Currently only works with resources.
+optional arguments:   
+  -h, --help            show this help message and exit  
+  -i, --imports         Display import tree  
+  -s, --sections        Display section information   
+  -v, --versioninfo     Display section information   
+  -r, --resources       Display resource information   
+  -D DUMP_OFFSET, --Dump DUMP_OFFSET   
+                        Dump data using the passed offset or 'ALL'.   
+                        Currently only works with resources.  
 
   
 
