@@ -36,9 +36,13 @@ try:
 except Exception as e:
     print 'Error - Please ensure you install the pefile library %s ' % e
     sys.exit(-1)
-
-class FileInfo:
+try:
+    import magic
+except ImportError:
+    pass
     
+class FileInfo:
+        
     #https://msdn.microsoft.com/en-us/library/ms648009(v=vs.85).aspx
     resource_type = {
         1:'RT_CURSOR',
@@ -279,10 +283,6 @@ class FileInfo:
             print 'Warning: %s' % per
         
     def gettype(self):
-        try:
-            import magic
-        except Exception as e:
-            return 'Error - Please ensure you install the magic library.'
 
         mdata = magic.open(magic.MAGIC_NONE)
         mdata.load()
@@ -478,7 +478,7 @@ def print_resources(finfo,dumprva):
         else:
             #Identified by name 
             rname = str(entry.name)   
-        data += ' Name: %s\n' % rname
+        data += ' Type: %s\n' % rname
         if hasattr(entry,'directory'):
             data += "  {:20}{:20}{:20}{:20}{:20}\n".format("Name", \
             "Language","SubLang", "Offset", "Size")
