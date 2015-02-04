@@ -2,7 +2,7 @@
 
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
 """
  --- History ---
@@ -16,8 +16,9 @@ __version__ = '0.0.6'
             - Moved VersionInfo from default output
   1.22.2015 - Minor updates.
   2.01.2015 - Added resources 
-            - Added option to extract resource data by passing an rva_offset or 'ALL'
+            - Added option to extract resource data by passing rva_offset or 'ALL'
             - Updated section output
+  2.03.2015 - Updated resource output
 
 
 """
@@ -282,12 +283,17 @@ class FileInfo:
         except Exception as per:
             print 'Warning: %s' % per
         
-    def gettype(self):
-
-        mdata = magic.open(magic.MAGIC_NONE)
-        mdata.load()
-        f = open(self.filename,'rb').read()
-        return mdata.buffer(f) 
+    def gettype(self, data):
+        magictype = ''
+        try:
+            mdata = magic.open(magic.MAGIC_NONE)
+            mdata.load()
+            magictype = mdata.buffer(data)
+        except NameError:
+            magictype = 'Error - python-magic library required.'
+        except Exception:
+            magictype = 'Error - processing file.'
+        return magictype
             
     def gethash(self, htype):       
         f = open(self.filename,'rb')
@@ -400,7 +406,11 @@ class FileInfo:
         fobj += "---- File Summary ----\n"
         fobj += "\n"
         fobj += ' {:<16} {}\n'.format("Filename",self.filename)
-        fobj += ' {:<16} {}\n'.format("Magic Type",self.gettype())
+        if self.pe == None:
+            data = open(self.filename,'rb').read()
+            fobj += ' {:<16} {}\n'.format("Magic Type",self.gettype(data))
+        else:
+            fobj += ' {:<16} {}\n'.format("Magic Type",self.gettype(self.pe))
         fobj += ' {:<16} {}\n'.format("Size", self.filesize)
         fobj += ' {:<16} {}\n'.format("First Bytes",self.getbytes(0,16))
         fobj += ' {:<16} {}\n'.format("MD5",self.gethash('md5'))
@@ -479,8 +489,8 @@ def print_resources(finfo,dumprva):
             rname = str(entry.name)   
         data += ' Type: %s\n' % rname
         if hasattr(entry,'directory'):
-            data += "  {:20}{:20}{:20}{:20}{:20}\n".format("Name", \
-            "Language","SubLang", "Offset", "Size")
+            data += "  {:20}{:16}{:16}{:12}{:12}{:64}\n".format("Name", \
+            "Language","SubLang", "Offset", "Size", "File Type")
             for resname in entry.directory.entries:
                 if resname.id is not None:
                     try:
@@ -493,10 +503,11 @@ def print_resources(finfo,dumprva):
                     if hasattr(entry,'data'):
                         offset = "{0:#0{1}x}".format(entry.data.struct.OffsetToData,10)
                         #offset = entry.data.struct.OffsetToData
-                        data +=  '{:20}'.format(FileInfo.langtype[entry.data.lang])
-                        data +=  '{:20}'.format('<not implemented>')
-                        data +=  '{:20}'.format(offset)
-                        data +=  '{:20}'.format("{0:#0{1}x}".format(entry.data.struct.Size,10))
+                        data +=  '{:16}'.format(FileInfo.langtype[entry.data.lang])
+                        data +=  '{:16}'.format('<---->')
+                        data +=  '{:12}'.format(offset)
+                        data +=  '{:12}'.format("{0:#0{1}x}".format(entry.data.struct.Size,10))
+                        data +=  '{:64}'.format(finfo.gettype(finfo.extractdata(entry.data.struct.OffsetToData, entry.data.struct.Size)[:64]))
                         
                         if dumpaddress == 'ALL' or dumpaddress == offset:
                             data += '\n\n  Matched offset[%s] -- dumping resource' % dumpaddress
