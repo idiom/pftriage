@@ -1,4 +1,4 @@
-# pfi
+# pype
 Python File Info - Tool to gather information on PE and other files. 
 
 Dependencies
@@ -10,7 +10,7 @@ Dependencies
 Usage
 -----
 
-pfi.py [-h] [-i] [-s] file
+pype.py [-h] [-i] [-s] file
 
 Show information about a file.  
   
