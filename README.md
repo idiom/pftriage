@@ -1,5 +1,8 @@
-# pfi
-Python File Info - Tool to gather information on PE and other files. 
+
+
+# pype
+
+Tool to gather information on PE and other files. 
 
 Dependencies
 -----
@@ -10,22 +13,21 @@ Dependencies
 Usage
 -----
 
-pfi.py [-h] [-i] [-s] file
+pype.py [-h] [-i] [-s] file
 
 Show information about a file.  
   
 positional arguments:  
   file            The target file.  
   
-optional arguments:  
-         
--h, --help            show this help message and exit  
+optional arguments:
+-h, --help            show this help message and exit
 -i, --imports         Display import tree  
--s, --sections        Display section information   
--v, --versioninfo     Display section information   
+-a, --analyze         Analyze the file for common malware indicators
+-s, --sections        Display section information
 -r, --resources       Display resource information   
 -D DUMP_OFFSET, --Dump DUMP_OFFSET   
                         Dump data using the passed offset or 'ALL'.   
-                        Currently only works with resources.  
+                        Currently only works with resources.
 
   

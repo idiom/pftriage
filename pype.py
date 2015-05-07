@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+# -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
 __version__ = '0.0.7'
@@ -8,7 +8,7 @@ __version__ = '0.0.7'
  --- History ---
 
   1.19.2015 - Initial Revision 
-  1.20.2015 - Fixed import issues and minor bugs
+  1.20.2015 - Fixed import issues and minor bugsThis inspection detects situations when dictionary creation could be rewritten with dictionary literal.
             - Added sha256 to default output
             - Updated Stringtable info
             - Fixed default display
@@ -22,18 +22,19 @@ __version__ = '0.0.7'
   2.11.2015 - Removed type lookup when printing resource names
             - Minor updates
   3.02.2015 - Updated to use pefile lang/sublang lookups.
-
+  5.06.2015 - Added analysis option to analzye the file for common indicators of bad
+            - removed -v switch for version info this will be output when printing file details
+            -
 
 """
 
 
 import argparse 
 import hashlib 
-import os.path
-from struct import * 
+import os
+import re
 import time
 import sys
-import zlib
 
 try:
     import pefile
@@ -46,7 +47,7 @@ try:
 except ImportError:
     pass
     
-class FileInfo:
+class pype:
         
     # https://msdn.microsoft.com/en-us/library/ms648009(v=vs.85).aspx
     resource_type = {
@@ -151,11 +152,14 @@ class FileInfo:
         self.filename = tfile
         self.pe       = None
         self.filesize = os.path.getsize(self.filename)
-        
+
         try:
             self.pe = pefile.PE(self.filename)
         except Exception as per:
-            print 'Warning: %s' % per
+            sys.exit('Error! %s' % per)
+
+    def _getpath(self):
+        return os.path.abspath(os.path.dirname(__file__))
 
     def getfiletype(self, data):
 
@@ -165,23 +169,18 @@ class FileInfo:
             magictype = mdata.buffer(data)
         except NameError:
             magictype = 'Error - python-magic library required.'
-        except Exception:
+        except Exception as e:
             magictype = 'Error - processing file.'
         return magictype
             
-    def gethash(self, htype):       
-
-        f = open(self.filename, 'rb')
-        fdat = f.read()
-        f.close()
-
+    def gethash(self, htype):
         if htype == 'md5':
             m = hashlib.md5() 
         elif htype == 'sha1':
             m = hashlib.sha1() 
         elif htype == 'sha256':
             m = hashlib.sha256() 
-        m.update(fdat)
+        m.update(self.pe.__data__)
         return m.hexdigest()    
     
     def getimphash(self):
@@ -276,17 +275,82 @@ class FileInfo:
         for c in dat:
             bstr += format(ord(c), 'x') + ' '
         return bstr
-        
-    def __repr__(self):        
+
+    def scan_signatures(self, sigfile):
+        sigs = peutils.SignatureDatabase(sigfile)
+        matches = sigs.match_all(self.pe, ep_only=True)
+        return matches
+
+    def strings(self, slen=8):
+        return re.findall("[^\x00-\x1F\x7F-\xFF]{%d,}" % slen, self.pe.__data__)
+
+    def analyze(self):
+        """
+
+        Analyze the loaded file.
+
+        :return: -- A List of results
+        """
+
+        results = []
+
+        modbl = ['MSVBVM60.DLL', 'MSVBVM50.DLL']
+
+        modlist = ['KERNEL32.DLL', 'USER32.DLL', 'WINMM.DLL', 'NTDLL.DLL']
+
+        dbglist = ['isdebuggerpresent', 'checkremotedebuggerpresent', 'gettickcount', 'outputdebugstring',
+                   'ntqueryobject', 'findwindow', 'timegettime', 'ntqueryinformationprocess',
+                   'isprocessorfeaturepresent', 'ntquerysysteminformation', 'createtoolhelp32snapshot']
+        # Check for CreateDesktop and SwitchDesktop both of these together indicate anti-debugging
+
+        importbl = ['openprocess', 'virtualallocex', 'writeprocessmemory', 'createremotethread', 'readprocessmemory',
+                    'createprocess', 'winexec', 'shellexecute', 'httpsendrequest', 'internetreadfile', 'internetconnect',
+                    'createservice', 'startservice']
+
+        predef_sections = ['.text', '.bss', '.rdata', '.data', '.rsrc', '.edata', '.idata', '.pdata', '.debug',
+                           '.reloc', '.sxdata']
+
+        modules = self.listimports()
+        impcount = len(modules)
+
+        if impcount < 3:
+            results.append(AnalysisResult(1, 'Imports', "Low import count %d " % impcount))
+
+        for modulename in modules:
+            if modulename in modbl:
+                results.append(AnalysisResult(0, 'Imports', "Suspicious Import [%s]" % modulename))
+
+            if modulename.upper() in modlist:
+                for symbol in modules[modulename]:
+                    if symbol.name.lower() in dbglist:
+                        results.append(AnalysisResult(0, 'AntiDebug', 'AntiDebug Function import [%s]' % symbol.name))
+                    if symbol.name.lower() in importbl:
+                        results.append(AnalysisResult(0, 'Imports', 'Suspicious API Call [%s]' % symbol.name))
+
+        sections = self.pe.sections
+        for section in sections:
+            if section.Name.strip('\0') not in predef_sections:
+                results.append(AnalysisResult(1, 'Sections', 'Uncommon Section Name [%s]' % section.Name.strip('\0')))
+
+            if section.SizeOfRawData == 0:
+                results.append(AnalysisResult(1, 'Sections', 'Raw Section Size is 0 [%s]' % section.Name.strip('\0')))
+
+        # Scan for peid matches
+        matches = self.scan_signatures('%s/userdb.txt' % self._getpath())
+        if matches is not None:
+            for match in matches:
+                results.append(AnalysisResult(2, 'PeID', 'Match [%s]' % match[0]))
+        else:
+            results.append(AnalysisResult(2, 'PeID', 'No Matches'))
+
+        return results
+
+    def __repr__(self):
         fobj = "\n\n"
         fobj += "---- File Summary ----\n"
         fobj += "\n"
         fobj += ' {:<16} {}\n'.format("Filename", self.filename)
-        if self.pe is None:
-            data = open(self.filename, 'rb').read()
-            fobj += ' {:<16} {}\n'.format("Magic Type", self.getfiletype(data))
-        else:
-            fobj += ' {:<16} {}\n'.format("Magic Type", self.getfiletype(self.pe))
+        fobj += ' {:<16} {}\n'.format("Magic Type", self.getfiletype(open(self.filename, 'rb').read()))
         fobj += ' {:<16} {}\n'.format("Size", self.filesize)
         fobj += ' {:<16} {}\n'.format("First Bytes", self.getbytes(0, 16))
         fobj += ' {:<16} {}\n'.format("MD5", self.gethash('md5'))
@@ -294,6 +358,7 @@ class FileInfo:
         fobj += ' {:<16} {}\n'.format("SHA256", self.gethash('sha256'))
         fobj += ' {:<16} {}\n'.format("Import Hash", self.getimphash())
         fobj += ' {:<16} {}\n'.format("ssdeep", self.getfuzzyhash())
+
         if self.pe is not None:
             fobj += ' {:<16} {}\n'.format("Packed", peutils.is_probably_packed(self.pe))
 
@@ -309,7 +374,33 @@ class FileInfo:
                                 
         return fobj
 
+
+class AnalysisResult:
+
+    def __init__(self, severity, restype, message):
+        self.severity = severity
+        self.restype = restype
+        self.message = message
+
+
+    def _formatmsg(self, sev, string):
+        # 31 - Error
+        # 33 - Warning
+        # 37 - Info
+        if sev == 0:
+            return "\033[31m [!] %s \033[0m" % string
+        elif sev == 1:
+            return "\033[33m [!] %s \033[0m" % string
+        elif sev == 2:
+            return "\033[37m [*] %s \033[0m" % string
+        else:
+            return " [*] " + string
+
+    def __repr__(self):
+        return ' {:<30s}{:<20s}'.format(self._formatmsg(self.severity, self.restype), self.message)
+
 def print_imports(modules):
+
     print " ---- Imports ----  "
     print ' Number of imported modules: %s \n ' % len(modules)
     for str_entry in modules:
@@ -328,22 +419,36 @@ def print_imports(modules):
 def print_versioninfo(versioninfo):
 
     # output the version info blocks.
-    print "\n---- Version Info ----  \n\n"            
-    if 'StringInfo' in versioninfo:        
+    print '\n---- Version Info ----  \n'
+    if 'StringInfo' in versioninfo:
         sinfo = versioninfo['StringInfo']
-        for str_entry in sinfo:                
-            print ' {:<16} {}'.format(str_entry,sinfo[str_entry].encode('utf-8'))
-    if 'VarInfo' in versioninfo:      
-        print ''
+        if len(sinfo) == 0:
+            print ' No version info block...'
+        else:
+            for str_entry in sinfo:
+                print ' {:<16} {}'.format(str_entry, sinfo[str_entry].encode('utf-8'))
+
+    if 'VarInfo' in versioninfo:
         vinfo = versioninfo['VarInfo']
-        for str_entry in vinfo:
-            if str_entry == 'LangID':
-                print ' {:<16} {} ({})'.format('LangID',FileInfo.langID[int(vinfo[str_entry],16)], vinfo[str_entry].encode('utf-8'))
-            elif str_entry == 'charsetID':
-                print ' {:<16} {} ({})'.format('charsetID',FileInfo.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8'))
-            else:
-                print ' {:<16} {}'.format(str_entry,vinfo[str_entry].encode('utf-8'))
+        if len(vinfo) == 0:
+            print ' No language info block...'
+        else:
+            print ''
+            for str_entry in vinfo:
+                if str_entry == 'LangID':
+                    try:
+                        print ' {:<16} {} ({})'.format('LangID', pype.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8'))
+                    except KeyError:
+                        print ' {:<16} {} ({})'.format('LangID', 'Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
+                elif str_entry == 'charsetID':
+                    try:
+                        print ' {:<16} {} ({})'.format('charsetID', pype.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8'))
+                    except KeyError:
+                        print ' {:<16} {} ({})'.format('charsetID: Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
+                else:
+                    print ' {:<16} {}'.format(str_entry, vinfo[str_entry].encode('utf-8'))
     print ''
+
     
 
 def print_resources(finfo, dumprva):
@@ -366,7 +471,7 @@ def print_resources(finfo, dumprva):
         rname = ''
 
         if entry.id is not None:
-            rname = FileInfo.resource_type[entry.id]
+            rname = pype.resource_type[entry.id]
         else:
             # Identified by name
             rname = str(entry.name)
@@ -405,7 +510,17 @@ def print_resources(finfo, dumprva):
             data += '\n'
     print data
 
-        
+
+def print_analysis(target):
+
+    print '[*] Analyzing File...'
+    results = target.analyze()
+    print '[*] Analysis Complete...'
+    print
+    for analysis_result in results:
+        print analysis_result
+    print ''
+
 
 def print_sections(sections):
     sdata = "\n ---- Section Info ----  \n\n"
@@ -423,39 +538,65 @@ def print_sections(sections):
         sdata += "{:<20}".format(hashlib.md5(section.get_data()).hexdigest())
         sdata += "\n"        
     print sdata
- 
+
+
+def banner():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print
+    print
+    print '      ▄███████▄ ▄██   ▄      ▄███████▄    ▄████████ '
+    print '     ███    ███ ███   ██▄   ███    ███   ███    ███ '
+    print '     ███    ███ ███▄▄▄███   ███    ███   ███    █▀  '
+    print '     ███    ███ ▀▀▀▀▀▀███   ███    ███  ▄███▄▄▄     '
+    print '   ▀█████████▀  ▄██   ███ ▀█████████▀  ▀▀███▀▀▀     '
+    print '     ███        ███   ███   ███          ███    █▄  '
+    print '     ███        ███   ███   ███          ███    ███ '
+    print '    ▄████▀       ▀█████▀   ▄████▀        ██████████   %s' % __version__
+    print
+    print
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Show information about a file.")
-    parser.add_argument("file", help="The target file+.")    
+    parser = argparse.ArgumentParser(prog='pype', usage='%(prog)s [options]', description="Show information about a file.")
+    parser.add_argument("file", help="The file to analyze.")
     parser.add_argument('-i', '--imports', dest='imports', action='store_true', help="Display import tree")
     parser.add_argument('-s', '--sections', dest='sections', action='store_true', help="Display section information")
-    parser.add_argument('-v', '--versioninfo', dest='version', action='store_true', help="Display section information")
     parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
-    parser.add_argument('-D', '--Dump', nargs=1, dest='dump_offset', help="Dump data using the passed offset or 'ALL'. \
-    \nCurrently only works with resources.")
+    parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset', help="Dump data using the passed offset or 'ALL'. \
+                                                                           Currently only works with resources.")
+    parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', help="Alternate PEiD Signature File")
+    parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file")
 
-    args = parser.parse_args()
+    # display banner
+    banner()
+
+    try:
+        args = parser.parse_args()
+    except:
+        parser.print_help()
+        return -1
+
     print '[*] Loading File...'
-    q = FileInfo(args.file)
-    
-    if not args.version and not args.imports and not args.sections and not args.resources:
-        # print file metadata
+    targetfile = pype(args.file)
+
+    # if no options are selected print the file details
+    if not args.imports and not args.sections and not args.resources and not args.analyze:
         print '[*] Processing File details...'
-        print q
-    
-    if args.version:
+        print targetfile
         print '[*] Loading Version Info'
-        print_versioninfo(q.getstringentries())
+        print_versioninfo(targetfile.getstringentries())
+
+    if args.analyze:
+        print_analysis(targetfile)
     
     if args.imports:
-        print_imports(q.listimports())
+        print_imports(targetfile.listimports())
     
     if args.sections:
-        print_sections(q.pe.sections)
+        print_sections(targetfile.pe.sections)
         
     if args.resources:
-        print_resources(q, args.dump_offset)
-    
+        print_resources(targetfile, args.dump_offset)
 
 if __name__ == '__main__':
     main()
