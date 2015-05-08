@@ -2,20 +2,20 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 """
  --- History ---
 
-  1.19.2015 - Initial Revision 
+  1.19.2015 - Initial Revision
   1.20.2015 - Fixed import issues and minor bugsThis inspection detects situations when dictionary creation could be rewritten with dictionary literal.
             - Added sha256 to default output
             - Updated Stringtable info
             - Fixed default display
-  1.21.2015 - Fixed output issue with VarOutputInfo 
+  1.21.2015 - Fixed output issue with VarOutputInfo
             - Moved VersionInfo from default output
   1.22.2015 - Minor updates.
-  2.01.2015 - Added resources 
+  2.01.2015 - Added resources
             - Added option to extract resource data by passing rva_offset or 'ALL'
             - Updated section output
   2.03.2015 - Updated resource output
@@ -24,7 +24,7 @@ __version__ = '0.0.7'
   3.02.2015 - Updated to use pefile lang/sublang lookups.
   5.06.2015 - Added analysis option to analzye the file for common indicators of bad
             - removed -v switch for version info this will be output when printing file details
-            -
+  6.07.2015 - updates to analysis checks
 
 """
 
@@ -296,19 +296,22 @@ class pype:
 
         modbl = ['MSVBVM60.DLL', 'MSVBVM50.DLL']
 
-        modlist = ['KERNEL32.DLL', 'USER32.DLL', 'WINMM.DLL', 'NTDLL.DLL']
+        modlist = ['KERNEL32.DLL', 'USER32.DLL', 'WINMM.DLL', 'NTDLL.DLL', 'PSAPI.DLL']
 
         dbglist = ['isdebuggerpresent', 'checkremotedebuggerpresent', 'gettickcount', 'outputdebugstring',
                    'ntqueryobject', 'findwindow', 'timegettime', 'ntqueryinformationprocess',
-                   'isprocessorfeaturepresent', 'ntquerysysteminformation', 'createtoolhelp32snapshot']
-        # Check for CreateDesktop and SwitchDesktop both of these together indicate anti-debugging
+                   'isprocessorfeaturepresent', 'ntquerysysteminformation', 'createtoolhelp32snapshot', 'blockinput',
+                   'setunhandledexceptionfilter', 'queryperformancecounter', 'ntsetdebugfilterstate', 'dbgbreakpoint',
+                   'rtlqueryprocessdebuginformation', 'blockinput']
+
+        dsdcalls = ['createdesktop', 'switchdesktop']
 
         importbl = ['openprocess', 'virtualallocex', 'writeprocessmemory', 'createremotethread', 'readprocessmemory',
                     'createprocess', 'winexec', 'shellexecute', 'httpsendrequest', 'internetreadfile', 'internetconnect',
                     'createservice', 'startservice']
 
         predef_sections = ['.text', '.bss', '.rdata', '.data', '.rsrc', '.edata', '.idata', '.pdata', '.debug',
-                           '.reloc', '.sxdata']
+                           '.reloc', '.sxdata', '.tls']
 
         modules = self.listimports()
         impcount = len(modules)
@@ -316,6 +319,7 @@ class pype:
         if impcount < 3:
             results.append(AnalysisResult(1, 'Imports', "Low import count %d " % impcount))
 
+        dsd = 0
         for modulename in modules:
             if modulename in modbl:
                 results.append(AnalysisResult(0, 'Imports', "Suspicious Import [%s]" % modulename))
@@ -326,6 +330,11 @@ class pype:
                         results.append(AnalysisResult(0, 'AntiDebug', 'AntiDebug Function import [%s]' % symbol.name))
                     if symbol.name.lower() in importbl:
                         results.append(AnalysisResult(0, 'Imports', 'Suspicious API Call [%s]' % symbol.name))
+                    if symbol.name.lower() in dsdcalls:
+                        dsd += 1
+
+        if dsd == 2:
+            results.append(AnalysisResult(0, 'AntiDebug', 'AntiDebug Function import CreateDesktop/SwitchDestkop'))
 
         sections = self.pe.sections
         for section in sections:
@@ -363,9 +372,11 @@ class pype:
             fobj += ' {:<16} {}\n'.format("Packed", peutils.is_probably_packed(self.pe))
 
             hinfo = self.getheaderinfo()
+
             for str_key in hinfo:
                 fobj += ' {:<16} {}\n'.format(str_key, hinfo[str_key])
             iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
+
             flags = []
             fobj += ' {:<16} \n'.format("Characteristics")
             for flag in iflags:
