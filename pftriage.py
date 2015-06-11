@@ -241,7 +241,7 @@ class pype:
     def getheaderinfo(self):
         info = {}
         info['Sections'] = self.pe.FILE_HEADER.NumberOfSections
-        info['TimeStamp'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
+        info['Compile Time'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
         info['Signature'] = hex(self.pe.NT_HEADERS.Signature)
     
         return info
@@ -265,15 +265,19 @@ class pype:
             data = None
         return data
         
-    def getbytes(self, start, length):
-        f = open(self.filename, 'rb')
-        f.seek(start)
-        dat = f.read(length)
+    def getbytestring(self, start, length, mmap=False):
+
+        dat = ''
+        if mmap:
+            mmdat = self.pe.get_memory_mapped_image()
+            dat = mmdat[start:start+length]
+        else:
+            dat = self.pe.__data__[start:start+length]
         
         bstr = ''
         
         for c in dat:
-            bstr += format(ord(c), 'x') + ' '
+            bstr += '%s ' % c.encode('hex')
         return bstr
 
     def scan_signatures(self, sigfile):
@@ -312,6 +316,12 @@ class pype:
 
         predef_sections = ['.text', '.bss', '.rdata', '.data', '.rsrc', '.edata', '.idata', '.pdata', '.debug',
                            '.reloc', '.sxdata', '.tls']
+
+        if not self.pe.verify_checksum():
+            results.append(AnalysisResult(0, 'Checksum', "Invalid CheckSum"))
+
+        if peutils.is_probably_packed(self.pe):
+            results.append(AnalysisResult(1, 'Packed', "Sample is probably packed"))
 
         modules = self.listimports()
         impcount = len(modules)
@@ -361,7 +371,9 @@ class pype:
         fobj += ' {:<16} {}\n'.format("Filename", self.filename)
         fobj += ' {:<16} {}\n'.format("Magic Type", self.getfiletype(open(self.filename, 'rb').read()))
         fobj += ' {:<16} {}\n'.format("Size", self.filesize)
-        fobj += ' {:<16} {}\n'.format("First Bytes", self.getbytes(0, 16))
+        fobj += ' {:<16} {}\n'.format("First Bytes", self.getbytestring(0, 16))
+
+        fobj += ' {:<16} {}\n'.format("Checksum", self.pe.OPTIONAL_HEADER.CheckSum)
         fobj += ' {:<16} {}\n'.format("MD5", self.gethash('md5'))
         fobj += ' {:<16} {}\n'.format("SHA1", self.gethash('sha1'))
         fobj += ' {:<16} {}\n'.format("SHA256", self.gethash('sha256'))
@@ -370,9 +382,10 @@ class pype:
 
         if self.pe is not None:
             fobj += ' {:<16} {}\n'.format("Packed", peutils.is_probably_packed(self.pe))
+            fobj += ' {:<16} {}\n'.format('Entry Point', hex(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint))
+            fobj += ' {:<16} {}\n'.format("EP Bytes", self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True))
 
             hinfo = self.getheaderinfo()
-
             for str_key in hinfo:
                 fobj += ' {:<16} {}\n'.format(str_key, hinfo[str_key])
             iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
@@ -469,23 +482,28 @@ def print_resources(finfo, dumprva):
         dumpaddress = 0
     
     data = "\n ---- Resources ----  \n\n"
-    
+
+
     try:
         resdir = finfo.pe.DIRECTORY_ENTRY_RESOURCE
     except AttributeError:
         data += 'Resources not found...\n'
-        print data
-        return
+        return data
         
     for entry in resdir.entries:
-        dat = entry.struct 
+
         rname = ''
 
         if entry.id is not None:
-            rname = pype.resource_type[entry.id]
+            try:
+                rname = pype.resource_type[entry.id]
+            except KeyError:
+                rname = "Unknown (%s)" % entry.id
         else:
             # Identified by name
             rname = str(entry.name)
+
+
 
         data += ' Type: %s\n' % rname
         if hasattr(entry, 'directory'):
@@ -497,22 +515,26 @@ def print_resources(finfo, dumprva):
                                                                 "File Type")
 
             for resname in entry.directory.entries:
+
                 if resname.id is not None:
                     data += '  {:<16}'.format(hex(resname.id))
                 else:
                     data += '  {:<16}'.format(resname.name)
-                for entry in resname.directory.entries:
-                    if hasattr(entry, 'data'):
-                        offset = '{0:#0{1}x}'.format(entry.data.struct.OffsetToData, 10)
-                        data += '{:16}'.format(pefile.LANG[entry.data.lang])
-                        data += '{:20}'.format(pefile.get_sublang_name_for_lang(entry.data.lang, entry.data.sublang).replace('SUBLANG_', ''))
+
+                for resentry in resname.directory.entries:
+                    if hasattr(resentry, 'data'):
+                        offset = '{0:#0{1}x}'.format(resentry.data.struct.OffsetToData, 10)
+                        data += '{:16}'.format(pefile.LANG[resentry.data.lang])
+                        data += '{:20}'.format(pefile.get_sublang_name_for_lang(resentry.data.lang,
+                                                                                resentry.data.sublang).replace('SUBLANG_', ''))
                         data += '{:12}'.format(offset)
-                        data += '{:12}'.format("{0:#0{1}x}".format(entry.data.struct.Size, 10))
-                        data += '{:64}'.format(finfo.getfiletype(finfo.extractdata(entry.data.struct.OffsetToData, entry.data.struct.Size)[:64]))
+                        data += '{:12}'.format("{0:#0{1}x}".format(resentry.data.struct.Size, 10))
+                        data += '{:64}'.format(finfo.getfiletype(finfo.extractdata(resentry.data.struct.OffsetToData,
+                                                                                   resentry.data.struct.Size)[:64]))
                         
                         if dumpaddress == 'ALL' or dumpaddress == offset:
                             data += '\n\n  Matched offset[%s] -- dumping resource' % dumpaddress
-                            tmpdata = finfo.extractdata(entry.data.struct.OffsetToData, entry.data.struct.Size)
+                            tmpdata = finfo.extractdata(resentry.data.struct.OffsetToData, resentry.data.struct.Size)
                             filename = 'export-%s.bin' % offset
                             f = open(filename, 'wb')
                             f.write(tmpdata)
@@ -554,29 +576,23 @@ def print_sections(sections):
 def banner():
     os.system('cls' if os.name == 'nt' else 'clear')
     print
+    print '-----------------------------'
     print
-    print '      ▄███████▄ ▄██   ▄      ▄███████▄    ▄████████ '
-    print '     ███    ███ ███   ██▄   ███    ███   ███    ███ '
-    print '     ███    ███ ███▄▄▄███   ███    ███   ███    █▀  '
-    print '     ███    ███ ▀▀▀▀▀▀███   ███    ███  ▄███▄▄▄     '
-    print '   ▀█████████▀  ▄██   ███ ▀█████████▀  ▀▀███▀▀▀     '
-    print '     ███        ███   ███   ███          ███    █▄  '
-    print '     ███        ███   ███   ███          ███    ███ '
-    print '    ▄████▀       ▀█████▀   ▄████▀        ██████████   %s' % __version__
+    print '  pftriage %s' % __version__
     print
+    print '-----------------------------'
     print
-
 
 def main():
-    parser = argparse.ArgumentParser(prog='pype', usage='%(prog)s [options]', description="Show information about a file.")
-    parser.add_argument("file", help="The file to analyze.")
+    parser = argparse.ArgumentParser(prog='pype', usage='%(prog)s [options]', description="Show information about a file for triage.")
+    parser.add_argument("file", help="The file to triage.")
     parser.add_argument('-i', '--imports', dest='imports', action='store_true', help="Display import tree")
     parser.add_argument('-s', '--sections', dest='sections', action='store_true', help="Display section information")
     parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
     parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset', help="Dump data using the passed offset or 'ALL'. \
                                                                            Currently only works with resources.")
     parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', help="Alternate PEiD Signature File")
-    parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file")
+    parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
 
     # display banner
     banner()

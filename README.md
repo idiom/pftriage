@@ -1,8 +1,8 @@
+# pftraige
 
-
-# pype
-
-Tool to gather information on PE and other files. 
+pftriage is a tool to help analyze files during malware triage. It allows an analyst to quickly 
+view and extract properties of a file to help during the triage process. The tool also has an
+analyze function which can detect common malicious indicators used by malware.
 
 Dependencies
 -----
@@ -13,7 +13,7 @@ Dependencies
 Usage
 -----
 
-pype.py [-h] [-i] [-s] file
+pftriage.py [-h] [-i] [-s] file
 
 Show information about a file.  
   
@@ -21,7 +21,7 @@ positional arguments:
   file            The target file.  
   
 optional arguments:
--h, --help            show this help message and exit
+-h, --help            Show this help message and exit
 -i, --imports         Display import tree  
 -a, --analyze         Analyze the file for common malware indicators
 -s, --sections        Display section information
@@ -29,5 +29,5 @@ optional arguments:
 -D DUMP_OFFSET, --Dump DUMP_OFFSET   
                         Dump data using the passed offset or 'ALL'.   
                         Currently only works with resources.
-
+-a, --analys
   
