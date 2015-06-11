@@ -21,12 +21,16 @@ positional arguments:
   file            The target file.  
   
 optional arguments:
--h, --help            Show this help message and exit
+-h, --help            Show this help message and exit  
 -i, --imports         Display import tree  
--a, --analyze         Analyze the file for common malware indicators
--s, --sections        Display section information
+-a, --analyze         Analyze the file for common malware indicators  
+-s, --sections        Display section information  
 -r, --resources       Display resource information   
 -D DUMP_OFFSET, --Dump DUMP_OFFSET   
                         Dump data using the passed offset or 'ALL'.   
-                        Currently only works with resources.
+                        Currently only works with resources.  
+                        
+ 
+ 
+ 
   
