@@ -1,4 +1,4 @@
-# pftraige
+# pftriage
 
 pftriage is a tool to help analyze files during malware triage. It allows an analyst to quickly 
 view and extract properties of a file to help during the triage process. The tool also has an
