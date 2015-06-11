@@ -29,5 +29,4 @@ optional arguments:
 -D DUMP_OFFSET, --Dump DUMP_OFFSET   
                         Dump data using the passed offset or 'ALL'.   
                         Currently only works with resources.
--a, --analys
   
