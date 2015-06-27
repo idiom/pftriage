@@ -12,7 +12,7 @@ Dependencies
 
 Usage
 -----
-
+```
 pftriage.py [-h] [-i] [-s] file
 
 Show information about a file.  
@@ -30,7 +30,7 @@ optional arguments:
                         Dump data using the passed offset or 'ALL'.   
                         Currently only works with resources.  
                         
- 
+ ```
  
  
   
