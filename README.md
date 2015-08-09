@@ -37,12 +37,6 @@ optional arguments:
                                     *Currently only works with resources. 
 -p PEIDSIGS, --peidsigs PEIDSIGS    Alternate PEiD Signature File 
 -y YARARULES, --yararules YARARULES Alternate Yara Rule File 
-
- 
-=======
-                        Dump data using the passed offset or 'ALL'.   
-                        Currently only works with resources.  
-                        
  ```
  
  
