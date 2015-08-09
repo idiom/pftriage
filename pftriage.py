@@ -300,7 +300,6 @@ class PFTriage:
             dat = self.pe.__data__[start:start+length]
         
         bstr = ''
-        
         for c in dat:
             bstr += '%s ' % c.encode('hex')
         return bstr
@@ -309,9 +308,6 @@ class PFTriage:
         sigs = peutils.SignatureDatabase(sigfile)
         matches = sigs.match_all(self.pe, ep_only=True)
         return matches
-
-    def strings(self, slen=8):
-        return re.findall("[^\x00-\x1F\x7F-\xFF]{%d,}" % slen, self.pe.__data__)
 
     def analyze(self):
         """
@@ -343,7 +339,7 @@ class PFTriage:
         predef_sections = ['.text', '.bss', '.rdata', '.data', '.rsrc', '.edata', '.idata', '.pdata', '.debug',
                            '.reloc', '.sxdata', '.tls']
 
-        dotnet = False
+
 
         # Get filetype
         results.append(AnalysisResult(2, 'File Type', self.magic_type(self.filename)))
@@ -358,6 +354,7 @@ class PFTriage:
         impcount = len(modules)
 
         dsd = 0
+        dotnet = False
         for modulename in modules:
 
             if modulename == 'mscoree.dll':
@@ -408,7 +405,11 @@ class PFTriage:
                     for sections in ymatches:
                         for match in ymatches[sections]:
                             if match['matches']:
-                                results.append(AnalysisResult(2, 'yara', 'Match [%s]' % match['rule']))
+                                # Check if the rule metadata has a severity field and use it otherwise default to sev 2
+                                if 'severity' in match['meta']:
+                                    results.append(AnalysisResult(match['meta']['severity'], 'yara', 'Match [%s]' % match['rule']))
+                                else:
+                                    results.append(AnalysisResult(2, 'yara', 'Match [%s]' % match['rule']))
                 else:
                     results.append(AnalysisResult(2, 'yara', 'No Matches'))
             except Exception as e:
