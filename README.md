@@ -8,28 +8,36 @@ Dependencies
 -----
 
  * pefile >= 1.2.10-139 - https://code.google.com/p/pefile/ 
+ * python-magic - https://pypi.python.org/pypi/python-magic/
  
+ 
+Install 
+-----
+
+If you want to install the script run 'python setup.py install' 
 
 Usage
 -----
 
-pftriage.py [-h] [-i] [-s] file
+pftriage.py [-h] [-i] [-s] [-r] [-a] file
 
 Show information about a file.  
   
 positional arguments:  
   file            The target file.  
   
-optional arguments:
--h, --help            Show this help message and exit  
--i, --imports         Display import tree  
--a, --analyze         Analyze the file for common malware indicators  
--s, --sections        Display section information  
--r, --resources       Display resource information   
+optional arguments:    
+-h, --help                          Show this help message and exit  
+-i, --imports                       Display import tree  
+-a, --analyze                       Analyze the file for common malware indicators  
+-s, --sections                      Display section information  
+-r, --resources                     Display resource information   
 -D DUMP_OFFSET, --Dump DUMP_OFFSET   
-                        Dump data using the passed offset or 'ALL'.   
-                        Currently only works with resources.  
-                        
+                                    Dump data using the passed offset or 'ALL'.   
+                                    *Currently only works with resources. 
+-p PEIDSIGS, --peidsigs PEIDSIGS    Alternate PEiD Signature File 
+-y YARARULES, --yararules YARARULES Alternate Yara Rule File 
+
  
  
  

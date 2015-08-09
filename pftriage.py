@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.0.8'
+__version__ = '0.0.9'
 
 """
  --- History ---
@@ -25,6 +25,11 @@ __version__ = '0.0.8'
   5.06.2015 - Added analysis option to analzye the file for common indicators of bad
             - removed -v switch for version info this will be output when printing file details
   6.07.2015 - updates to analysis checks
+  8.08.2015 - Updated to use python-magic
+            - Added setup.py
+            - Added yara rule scan in analysis
+            - Bug fixes
+
 
 """
 
@@ -42,12 +47,22 @@ try:
 except Exception as e:
     print 'Error - Please ensure you install the pefile library %s ' % e
     sys.exit(-1)
+
 try:
     import magic
 except ImportError:
     pass
+
+use_yara = False
+
+try:
+    import yara
+    use_yara = True
+except ImportError:
+    pass
+
     
-class pype:
+class PFTriage:
         
     # https://msdn.microsoft.com/en-us/library/ms648009(v=vs.85).aspx
     resource_type = {
@@ -144,7 +159,7 @@ class pype:
     }
 
     
-    def __init__(self, tfile):
+    def __init__(self, tfile, yararules='data/default.yara', peiddb='data/userdb.txt'):
         
         if not os.path.isfile(tfile):
             raise Exception('Error! File does not exist...')
@@ -152,6 +167,10 @@ class pype:
         self.filename = tfile
         self.pe       = None
         self.filesize = os.path.getsize(self.filename)
+
+        # Todo: This may improperly load a custom files as it will be relative to the app.
+        self.yararules = '%s/%s' % (self._getpath(), yararules)
+        self.peiddb = '%s/%s' % (self._getpath(), peiddb)
 
         try:
             self.pe = pefile.PE(self.filename)
@@ -161,16 +180,16 @@ class pype:
     def _getpath(self):
         return os.path.abspath(os.path.dirname(__file__))
 
-    def getfiletype(self, data):
-
+    def magic_type(self, tfile, isdata=False):
         try:
-            mdata = magic.open(magic.MAGIC_NONE)
-            mdata.load()
-            magictype = mdata.buffer(data)
+            if isdata:
+                magictype = magic.from_buffer(tfile)
+            else:
+                magictype = magic.from_file(tfile)
         except NameError:
             magictype = 'Error - python-magic library required.'
         except Exception as e:
-            magictype = 'Error - processing file.'
+            magictype = 'Error - processing file: %s' % e
         return magictype
             
     def gethash(self, htype):
@@ -211,7 +230,8 @@ class pype:
                                     varfileinfo['LangID'] = tparms[0]
                                     # TODO: Fix this...this is terrible
                                     varfileinfo['charsetID'] = str(int(tparms[1], 16))
-                                except Exception as e: 
+                                except Exception as e:
+                                    # Todo Update error handling to better support being called from code.
                                     print e
                                     
                     elif t.name == 'StringFileInfo':
@@ -233,8 +253,13 @@ class pype:
     def listimports(self):
         modules = {}
         if self.pe is not None:
-            for module in self.pe.DIRECTORY_ENTRY_IMPORT:
-                modules[module.dll] = module.imports
+            try:
+                for module in self.pe.DIRECTORY_ENTRY_IMPORT:
+                    modules[module.dll] = module.imports
+            except Exception as e:
+                # Todo Update error handling to better support being called from code.
+                print 'Error processing imports - ' % e
+
         return modules
                         
                         
@@ -314,8 +339,14 @@ class pype:
                     'createprocess', 'winexec', 'shellexecute', 'httpsendrequest', 'internetreadfile', 'internetconnect',
                     'createservice', 'startservice']
 
+        # Standard section names.
         predef_sections = ['.text', '.bss', '.rdata', '.data', '.rsrc', '.edata', '.idata', '.pdata', '.debug',
                            '.reloc', '.sxdata', '.tls']
+
+        dotnet = False
+
+        # Get filetype
+        results.append(AnalysisResult(2, 'File Type', self.magic_type(self.filename)))
 
         if not self.pe.verify_checksum():
             results.append(AnalysisResult(0, 'Checksum', "Invalid CheckSum"))
@@ -326,11 +357,13 @@ class pype:
         modules = self.listimports()
         impcount = len(modules)
 
-        if impcount < 3:
-            results.append(AnalysisResult(1, 'Imports', "Low import count %d " % impcount))
-
         dsd = 0
         for modulename in modules:
+
+            if modulename == 'mscoree.dll':
+                dotnet = True
+                continue
+
             if modulename in modbl:
                 results.append(AnalysisResult(0, 'Imports', "Suspicious Import [%s]" % modulename))
 
@@ -342,6 +375,10 @@ class pype:
                         results.append(AnalysisResult(0, 'Imports', 'Suspicious API Call [%s]' % symbol.name))
                     if symbol.name.lower() in dsdcalls:
                         dsd += 1
+
+        # If the sample is dotnet, don't warn on a low import count.
+        if impcount < 3 and not dotnet:
+            results.append(AnalysisResult(1, 'Imports', "Low import count %d " % impcount))
 
         if dsd == 2:
             results.append(AnalysisResult(0, 'AntiDebug', 'AntiDebug Function import CreateDesktop/SwitchDestkop'))
@@ -355,21 +392,43 @@ class pype:
                 results.append(AnalysisResult(1, 'Sections', 'Raw Section Size is 0 [%s]' % section.Name.strip('\0')))
 
         # Scan for peid matches
-        matches = self.scan_signatures('%s/userdb.txt' % self._getpath())
+        matches = self.scan_signatures(self.peiddb)
         if matches is not None:
             for match in matches:
                 results.append(AnalysisResult(2, 'PeID', 'Match [%s]' % match[0]))
         else:
             results.append(AnalysisResult(2, 'PeID', 'No Matches'))
 
+        # Run yara rules
+        # TODO: Look at how to retern verbose rule info. This may be useful for upstream callers
+        if use_yara:
+            try:
+                ymatches = self.yara_scan()
+                if len(ymatches) > 0:
+                    for sections in ymatches:
+                        for match in ymatches[sections]:
+                            if match['matches']:
+                                results.append(AnalysisResult(2, 'yara', 'Match [%s]' % match['rule']))
+                else:
+                    results.append(AnalysisResult(2, 'yara', 'No Matches'))
+            except Exception as e:
+                results.append(AnalysisResult(2, 'yara', 'Error running yara rules: %s' % e))
+        else:
+            results.append(AnalysisResult(0, 'yara', 'Yara not run.'))
+
         return results
+
+    def yara_scan(self):
+        rules = yara.compile(self.yararules)
+        matches = rules.match(data=self.pe.__data__)
+        return matches
 
     def __repr__(self):
         fobj = "\n\n"
         fobj += "---- File Summary ----\n"
         fobj += "\n"
         fobj += ' {:<16} {}\n'.format("Filename", self.filename)
-        fobj += ' {:<16} {}\n'.format("Magic Type", self.getfiletype(open(self.filename, 'rb').read()))
+        fobj += ' {:<16} {}\n'.format("Magic Type", self.magic_type(self.filename))
         fobj += ' {:<16} {}\n'.format("Size", self.filesize)
         fobj += ' {:<16} {}\n'.format("First Bytes", self.getbytestring(0, 16))
 
@@ -383,7 +442,9 @@ class pype:
         if self.pe is not None:
             fobj += ' {:<16} {}\n'.format("Packed", peutils.is_probably_packed(self.pe))
             fobj += ' {:<16} {}\n'.format('Entry Point', hex(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint))
-            fobj += ' {:<16} {}\n'.format("EP Bytes", self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True))
+            fobj += ' {:<16} {}\n'.format('Image Base', hex(self.pe.OPTIONAL_HEADER.ImageBase))
+            fobj += ' {:<16} {}\n'.format("EP Bytes", self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint,
+                                                                         16, True))
 
             hinfo = self.getheaderinfo()
             for str_key in hinfo:
@@ -461,12 +522,12 @@ def print_versioninfo(versioninfo):
             for str_entry in vinfo:
                 if str_entry == 'LangID':
                     try:
-                        print ' {:<16} {} ({})'.format('LangID', pype.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8'))
+                        print ' {:<16} {} ({})'.format('LangID', PFTriage.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8'))
                     except KeyError:
                         print ' {:<16} {} ({})'.format('LangID', 'Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
                 elif str_entry == 'charsetID':
                     try:
-                        print ' {:<16} {} ({})'.format('charsetID', pype.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8'))
+                        print ' {:<16} {} ({})'.format('charsetID', PFTriage.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8'))
                     except KeyError:
                         print ' {:<16} {} ({})'.format('charsetID: Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
                 else:
@@ -496,7 +557,7 @@ def print_resources(finfo, dumprva):
 
         if entry.id is not None:
             try:
-                rname = pype.resource_type[entry.id]
+                rname = PFTriage.resource_type[entry.id]
             except KeyError:
                 rname = "Unknown (%s)" % entry.id
         else:
@@ -529,8 +590,8 @@ def print_resources(finfo, dumprva):
                                                                                 resentry.data.sublang).replace('SUBLANG_', ''))
                         data += '{:12}'.format(offset)
                         data += '{:12}'.format("{0:#0{1}x}".format(resentry.data.struct.Size, 10))
-                        data += '{:64}'.format(finfo.getfiletype(finfo.extractdata(resentry.data.struct.OffsetToData,
-                                                                                   resentry.data.struct.Size)[:64]))
+                        data += '{:64}'.format(finfo.magic_type(finfo.extractdata(resentry.data.struct.OffsetToData,
+                                                                                   resentry.data.struct.Size)[:64], True))
                         
                         if dumpaddress == 'ALL' or dumpaddress == offset:
                             data += '\n\n  Matched offset[%s] -- dumping resource' % dumpaddress
@@ -584,14 +645,18 @@ def banner():
     print
 
 def main():
-    parser = argparse.ArgumentParser(prog='pype', usage='%(prog)s [options]', description="Show information about a file for triage.")
+    parser = argparse.ArgumentParser(prog='pype', usage='%(prog)s [options]',
+                                     description="Show information about a file for triage.")
     parser.add_argument("file", help="The file to triage.")
     parser.add_argument('-i', '--imports', dest='imports', action='store_true', help="Display import tree")
     parser.add_argument('-s', '--sections', dest='sections', action='store_true', help="Display section information")
     parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
     parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset', help="Dump data using the passed offset or 'ALL'. \
                                                                            Currently only works with resources.")
-    parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', help="Alternate PEiD Signature File")
+    parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', default='data/userdb.txt',
+                        help="Alternate PEiD Signature File")
+    parser.add_argument('-y', '--yararules', dest='yararules', action='store', default='data/default.yara',
+                        help="Alternate Yara Rule File")
     parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
 
     # display banner
@@ -604,7 +669,7 @@ def main():
         return -1
 
     print '[*] Loading File...'
-    targetfile = pype(args.file)
+    targetfile = PFTriage(args.file)
 
     # if no options are selected print the file details
     if not args.imports and not args.sections and not args.resources and not args.analyze:
