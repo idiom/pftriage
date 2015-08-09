@@ -7,8 +7,9 @@ analyze function which can detect common malicious indicators used by malware.
 Dependencies
 -----
 
- * pefile >= 1.2.10-139 - https://code.google.com/p/pefile/ 
+ * pefile >= 1.2.10-139 - https://github.com/erocarrera/pefile
  * python-magic - https://pypi.python.org/pypi/python-magic/
+ * yara - https://pypi.python.org/pypi/yara
  
  
 Install 
