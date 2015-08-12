@@ -29,15 +29,11 @@ __version__ = '0.0.9'
             - Added setup.py
             - Added yara rule scan in analysis
             - Bug fixes
-
-
 """
-
 
 import argparse 
 import hashlib 
 import os
-import re
 import time
 import sys
 
@@ -62,7 +58,7 @@ except ImportError:
     pass
 
     
-class PFTriage:
+class PFTriage(object):
         
     # https://msdn.microsoft.com/en-us/library/ms648009(v=vs.85).aspx
     resource_type = {
@@ -158,8 +154,7 @@ class PFTriage:
         0x081A: "Serbo-Croatian (Cyrillic)"
     }
 
-    
-    def __init__(self, tfile, yararules='data/default.yara', peiddb='data/userdb.txt'):
+    def __init__(self, tfile, yararules='', peiddb=''):
         
         if not os.path.isfile(tfile):
             raise Exception('Error! File does not exist...')
@@ -168,9 +163,18 @@ class PFTriage:
         self.pe       = None
         self.filesize = os.path.getsize(self.filename)
 
-        # Todo: This may improperly load a custom files as it will be relative to the app.
-        self.yararules = '%s/%s' % (self._getpath(), yararules)
-        self.peiddb = '%s/%s' % (self._getpath(), peiddb)
+        defaultyarapath = 'data/default.yara'
+        defaultpeidpath = 'data/userdb.txt'
+
+        if not yararules:
+            self.yararules = '%s/%s' % (self._getpath(), defaultyarapath)
+        else:
+            self.yararules = yararules
+
+        if not peiddb:
+            self.peiddb = '%s/%s' % (self._getpath(), defaultpeidpath)
+        else:
+            self.peiddb = peiddb
 
         try:
             self.pe = pefile.PE(self.filename)
@@ -258,7 +262,7 @@ class PFTriage:
                     modules[module.dll] = module.imports
             except Exception as e:
                 # Todo Update error handling to better support being called from code.
-                print 'Error processing imports - ' % e
+                print 'Error processing imports - %s ' % e
 
         return modules
                         
@@ -407,15 +411,15 @@ class PFTriage:
                             if match['matches']:
                                 # Check if the rule metadata has a severity field and use it otherwise default to sev 2
                                 if 'severity' in match['meta']:
-                                    results.append(AnalysisResult(match['meta']['severity'], 'yara', 'Match [%s]' % match['rule']))
+                                    results.append(AnalysisResult(match['meta']['severity'], 'Yara Rule', '%s' % match['rule']))
                                 else:
-                                    results.append(AnalysisResult(2, 'yara', 'Match [%s]' % match['rule']))
+                                    results.append(AnalysisResult(2, 'Yara Rule', 'Match [%s]' % match['rule']))
                 else:
-                    results.append(AnalysisResult(2, 'yara', 'No Matches'))
+                    results.append(AnalysisResult(2, 'Yara Rule', 'No Matches'))
             except Exception as e:
-                results.append(AnalysisResult(2, 'yara', 'Error running yara rules: %s' % e))
+                results.append(AnalysisResult(2, 'Yara Rule', 'Error running yara rules: %s' % e))
         else:
-            results.append(AnalysisResult(0, 'yara', 'Yara not run.'))
+            results.append(AnalysisResult(0, 'Yara Rule', 'Yara not run.'))
 
         return results
 
@@ -565,8 +569,6 @@ def print_resources(finfo, dumprva):
             # Identified by name
             rname = str(entry.name)
 
-
-
         data += ' Type: %s\n' % rname
         if hasattr(entry, 'directory'):
             data += "  {:16}{:16}{:20}{:12}{:12}{:64}\n".format("Name",
@@ -654,11 +656,13 @@ def main():
     parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
     parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset', help="Dump data using the passed offset or 'ALL'. \
                                                                            Currently only works with resources.")
-    parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', default='data/userdb.txt',
+    parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', default='',
                         help="Alternate PEiD Signature File")
-    parser.add_argument('-y', '--yararules', dest='yararules', action='store', default='data/default.yara',
+    parser.add_argument('-y', '--yararules', dest='yararules', action='store', default='',
                         help="Alternate Yara Rule File")
     parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
+    parser.add_argument('-V', '--version', dest='version', action='store_true', help="Display version.")
+
 
     # display banner
     banner()
@@ -669,8 +673,13 @@ def main():
         parser.print_help()
         return -1
 
+
+    if args.version:
+        # Just exit
+        return 0
+
     print '[*] Loading File...'
-    targetfile = PFTriage(args.file)
+    targetfile = PFTriage(args.file, yararules=args.yararules, peiddb=args.peidsigs)
 
     # if no options are selected print the file details
     if not args.imports and not args.sections and not args.resources and not args.analyze:
