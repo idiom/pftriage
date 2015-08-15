@@ -154,7 +154,7 @@ class PFTriage(object):
         0x081A: "Serbo-Croatian (Cyrillic)"
     }
 
-    def __init__(self, tfile, yararules='', peiddb=''):
+    def __init__(self, tfile, yararules='', peiddb='', verbose=False, loglevel='Error'):
         
         if not os.path.isfile(tfile):
             raise Exception('Error! File does not exist...')
@@ -162,6 +162,8 @@ class PFTriage(object):
         self.filename = tfile
         self.pe       = None
         self.filesize = os.path.getsize(self.filename)
+        self.verbose = verbose
+        self.loglevel = loglevel
 
         defaultyarapath = 'data/default.yara'
         defaultpeidpath = 'data/userdb.txt'
@@ -541,24 +543,23 @@ def print_versioninfo(versioninfo):
 
     
 
-def print_resources(finfo, dumprva):
+def print_resources(target, dumprva):
     try:
         dumpaddress = dumprva[0]
     except:
         dumpaddress = 0
     
-    data = "\n ---- Resources ----  \n\n"
+    data = "\n ---- Resource Overview ----  \n\n"
 
 
     try:
-        resdir = finfo.pe.DIRECTORY_ENTRY_RESOURCE
+        resdir = target.pe.DIRECTORY_ENTRY_RESOURCE
     except AttributeError:
         data += 'Resources not found...\n'
-        return data
+        print data
+        return
         
     for entry in resdir.entries:
-
-        rname = ''
 
         if entry.id is not None:
             try:
@@ -571,19 +572,19 @@ def print_resources(finfo, dumprva):
 
         data += ' Type: %s\n' % rname
         if hasattr(entry, 'directory'):
-            data += "  {:16}{:16}{:20}{:12}{:12}{:64}\n".format("Name",
+            data += "  {:12}{:16}{:20}{:12}{:12}{:12}{:64}\n".format("Name",
                                                                 "Language",
                                                                 "SubLang",
                                                                 "Offset",
                                                                 "Size",
-                                                                "File Type")
+                                                                "Code Page",
+                                                                "Type")
 
             for resname in entry.directory.entries:
-
                 if resname.id is not None:
-                    data += '  {:<16}'.format(hex(resname.id))
+                    data += '  {:<12}'.format(hex(resname.id))
                 else:
-                    data += '  {:<16}'.format(resname.name)
+                    data += '  {:<12}'.format(resname.name)
 
                 for resentry in resname.directory.entries:
                     if hasattr(resentry, 'data'):
@@ -593,12 +594,13 @@ def print_resources(finfo, dumprva):
                                                                                 resentry.data.sublang).replace('SUBLANG_', ''))
                         data += '{:12}'.format(offset)
                         data += '{:12}'.format("{0:#0{1}x}".format(resentry.data.struct.Size, 10))
-                        data += '{:64}'.format(finfo.magic_type(finfo.extractdata(resentry.data.struct.OffsetToData,
+                        data += '{:12}'.format("{0:#0{1}x}".format(resentry.data.struct.CodePage, 10))
+                        data += '{:64}'.format(target.magic_type(target.extractdata(resentry.data.struct.OffsetToData,
                                                                                    resentry.data.struct.Size)[:64], True))
                         
                         if dumpaddress == 'ALL' or dumpaddress == offset:
                             data += '\n\n  Matched offset[%s] -- dumping resource' % dumpaddress
-                            tmpdata = finfo.extractdata(resentry.data.struct.OffsetToData, resentry.data.struct.Size)
+                            tmpdata = target.extractdata(resentry.data.struct.OffsetToData, resentry.data.struct.Size)
                             filename = 'export-%s.bin' % offset
                             f = open(filename, 'wb')
                             f.write(tmpdata)
@@ -619,21 +621,51 @@ def print_analysis(target):
     print ''
 
 
-def print_sections(sections):
-    sdata = "\n ---- Section Info ----  \n\n"
-    sdata += " {:10}{:20}{:20}{:20}{:20}\n".format("Name",
+def print_sections(target):
+
+    if not target.verbose:
+
+        sdata = "\n ---- Section Overview (use -v for detailed section info)  ----  \n\n"
+        sdata += " {:10}{:12}{:18}{:20}{:20}{:20}{:20}\n".format("Name",
+                                                        "Raw Size",
+                                                        "Raw Data Pointer",
                                                         "Virtual Address",
                                                         "Virtual Size",
                                                         "Entropy",
                                                         "Hash")
     
-    for section in sections:
-        sdata += " {:10}".format(section.Name.strip('\0'))
-        sdata += "{:20}".format("{0:#0{1}x}".format(section.VirtualAddress, 10))
-        sdata += "{:20}".format("{0:#0{1}x}".format(section.Misc_VirtualSize, 10))
-        sdata += "{:<20}".format(section.get_entropy())
-        sdata += "{:<20}".format(hashlib.md5(section.get_data()).hexdigest())
-        sdata += "\n"        
+        for section in target.pe.sections:
+            sdata += " {:10}".format(section.Name.strip('\0'))
+            sdata += "{:12}".format("{0:#0{1}x}".format(section.SizeOfRawData, 10))
+            sdata += "{:18}".format("{0:#0{1}x}".format(section.PointerToRawData, 10))
+            sdata += "{:20}".format("{0:#0{1}x}".format(section.VirtualAddress, 10))
+            sdata += "{:20}".format("{0:#0{1}x}".format(section.Misc_VirtualSize, 10))
+            sdata += "{:<20}".format(section.get_entropy())
+            sdata += "{:<20}".format(hashlib.md5(section.get_data()).hexdigest())
+            sdata += "\n"
+
+    else:
+        cflags = pefile.retrieve_flags(pefile.SECTION_CHARACTERISTICS, 'IMAGE_SCN_')
+
+        sdata = '\n ---- Detailed Section Info ----  \n\n'
+        for section in target.pe.sections:
+            sdata += " {:10}\n".format(section.Name.strip('\0'))
+            sdata += "  {:24} {:>10}\n".format("|-Entropy:", section.get_entropy())
+            sdata += "  {:24} {:>10}\n".format("|-MD5 Hash:", hashlib.md5(section.get_data()).hexdigest())
+            sdata += "  {:24} {:>10} ({:})\n".format("|-Raw Data Size:", "{0:#0{1}x}".format(section.SizeOfRawData, 10),
+                                                     section.SizeOfRawData)
+            sdata += "  {:24} {:>10}\n".format("|-Raw Data Pointer:", "{0:#0{1}x}".format(section.PointerToRawData, 10))
+            sdata += "  {:24} {:>10}\n".format("|-Virtual Address:", "{0:#0{1}x}".format(section.VirtualAddress, 10))
+            sdata += "  {:24} {:>10} ({:})\n".format("|-Virtual Size:", "{0:#0{1}x}".format(section.Misc_VirtualSize, 10),
+                                                     section.Misc_VirtualSize)
+            sdata += "  {:24} {:>10}\n".format("|-Characteristics:", "{0:#0{1}x}".format(section.Characteristics, 10))
+            for flag in cflags:
+                if getattr(section, flag[0]):
+                    sdata += "  {:24}{:>5}{:<24}\n".format('|', '|-', str(flag[0]))
+            sdata += "  {:24} {:<10}\n".format("|-Number Of Relocations:", section.NumberOfRelocations)
+            sdata += "  {:24} {:<10}\n".format("|-Line Numbers:", section.NumberOfLinenumbers)
+            sdata += '\n'
+
     print sdata
 
 
@@ -661,7 +693,8 @@ def main():
     parser.add_argument('-y', '--yararules', dest='yararules', action='store', default='',
                         help="Alternate Yara Rule File")
     parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
-    parser.add_argument('-V', '--version', dest='version', action='store_true', help="Display version.")
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False, help="Display version.")
+    parser.add_argument('-V', '--version', dest='version', action='store_true', help="Print version and exit.")
 
 
     # display banner
@@ -679,7 +712,7 @@ def main():
         return 0
 
     print '[*] Loading File...'
-    targetfile = PFTriage(args.file, yararules=args.yararules, peiddb=args.peidsigs)
+    targetfile = PFTriage(args.file, yararules=args.yararules, peiddb=args.peidsigs, verbose=args.verbose)
 
     # if no options are selected print the file details
     if not args.imports and not args.sections and not args.resources and not args.analyze:
@@ -695,7 +728,7 @@ def main():
         print_imports(targetfile.listimports())
     
     if args.sections:
-        print_sections(targetfile.pe.sections)
+        print_sections(targetfile)
         
     if args.resources:
         print_resources(targetfile, args.dump_offset)
