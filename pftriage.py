@@ -29,6 +29,8 @@ __version__ = '0.0.9'
             - Added setup.py
             - Added yara rule scan in analysis
             - Bug fixes
+  8.16.2015 -
+
 """
 
 import argparse 
@@ -186,16 +188,16 @@ class PFTriage(object):
     def _getpath(self):
         return os.path.abspath(os.path.dirname(__file__))
 
-    def magic_type(self, tfile, isdata=False):
+    def magic_type(self, data, isdata=False):
         try:
             if isdata:
-                magictype = magic.from_buffer(tfile)
+                magictype = magic.from_buffer(data)
             else:
-                magictype = magic.from_file(tfile)
+                magictype = magic.from_file(data)
         except NameError:
             magictype = 'Error - python-magic library required.'
         except Exception as e:
-            magictype = 'Error - processing file: %s' % e
+            magictype = 'Error getting magic type - %s' % e
         return magictype
             
     def gethash(self, htype):
@@ -258,23 +260,27 @@ class PFTriage(object):
         
     def listimports(self):
         modules = {}
-        if self.pe is not None:
-            try:
-                for module in self.pe.DIRECTORY_ENTRY_IMPORT:
-                    modules[module.dll] = module.imports
-            except Exception as e:
-                # Todo Update error handling to better support being called from code.
-                print 'Error processing imports - %s ' % e
-
+        try:
+            for module in self.pe.DIRECTORY_ENTRY_IMPORT:
+                modules[module.dll] = module.imports
+        except Exception as e:
+            # Todo Update error handling to better support being called from code.
+            print 'Error processing imports - %s ' % e
         return modules
                         
                         
     def getheaderinfo(self):
         info = {}
-        info['Sections'] = self.pe.FILE_HEADER.NumberOfSections
+        info['Checksum'] = self.pe.OPTIONAL_HEADER.CheckSum
         info['Compile Time'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
         info['Signature'] = hex(self.pe.NT_HEADERS.Signature)
-    
+        info['Packed'] = peutils.is_probably_packed(self.pe)
+        info['Image Base'] = hex(self.pe.OPTIONAL_HEADER.ImageBase)
+        info['Sections'] = self.pe.FILE_HEADER.NumberOfSections
+        info['Entry Point'] = hex(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint)
+        info['Subsystem'] = pefile.subsystem_types[self.pe.OPTIONAL_HEADER.Subsystem][0]
+        info['Linker Version'] = '{}.{}'.format(self.pe.OPTIONAL_HEADER.MajorLinkerVersion, self.pe.OPTIONAL_HEADER.MinorLinkerVersion)
+        info['EP Bytes'] = self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True)
         return info
     
     def getfuzzyhash(self):
@@ -434,35 +440,30 @@ class PFTriage(object):
         fobj = "\n\n"
         fobj += "---- File Summary ----\n"
         fobj += "\n"
-        fobj += ' {:<16} {}\n'.format("Filename", self.filename)
-        fobj += ' {:<16} {}\n'.format("Magic Type", self.magic_type(self.filename))
-        fobj += ' {:<16} {}\n'.format("Size", self.filesize)
-        fobj += ' {:<16} {}\n'.format("First Bytes", self.getbytestring(0, 16))
-
-        fobj += ' {:<16} {}\n'.format("Checksum", self.pe.OPTIONAL_HEADER.CheckSum)
-        fobj += ' {:<16} {}\n'.format("MD5", self.gethash('md5'))
-        fobj += ' {:<16} {}\n'.format("SHA1", self.gethash('sha1'))
-        fobj += ' {:<16} {}\n'.format("SHA256", self.gethash('sha256'))
-        fobj += ' {:<16} {}\n'.format("Import Hash", self.getimphash())
-        fobj += ' {:<16} {}\n'.format("ssdeep", self.getfuzzyhash())
+        fobj += ' General\n'
+        fobj += ' {:4}{:<16} {}\n'.format('', "Filename", self.filename)
+        fobj += ' {:4}{:<16} {}\n'.format('', "Magic Type", self.magic_type(self.filename))
+        fobj += ' {:4}{:<16} {}\n'.format('', "Size", self.filesize)
+        fobj += ' {:4}{:<16} {}\n\n'.format('', "First Bytes", self.getbytestring(0, 16))
+        fobj += ' Hashes\n'
+        fobj += ' {:4}{:<16} {}\n'.format('', "MD5", self.gethash('md5'))
+        fobj += ' {:4}{:<16} {}\n'.format('', "SHA1", self.gethash('sha1'))
+        fobj += ' {:4}{:<16} {}\n'.format('', "SHA256", self.gethash('sha256'))
+        fobj += ' {:4}{:<16} {}\n'.format('', "Import Hash", self.getimphash())
+        fobj += ' {:4}{:<16} {}\n\n'.format('', "ssdeep", self.getfuzzyhash())
+        fobj += ' Headers\n'
 
         if self.pe is not None:
-            fobj += ' {:<16} {}\n'.format("Packed", peutils.is_probably_packed(self.pe))
-            fobj += ' {:<16} {}\n'.format('Entry Point', hex(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint))
-            fobj += ' {:<16} {}\n'.format('Image Base', hex(self.pe.OPTIONAL_HEADER.ImageBase))
-            fobj += ' {:<16} {}\n'.format("EP Bytes", self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint,
-                                                                         16, True))
-
             hinfo = self.getheaderinfo()
             for str_key in hinfo:
-                fobj += ' {:<16} {}\n'.format(str_key, hinfo[str_key])
+                fobj += ' {:4}{:<16} {}\n'.format('', str_key, hinfo[str_key])
             iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
 
             flags = []
-            fobj += ' {:<16} \n'.format("Characteristics")
+            fobj += ' {:4}{:<16} \n'.format('', "Characteristics")
             for flag in iflags:
                 if getattr(self.pe.FILE_HEADER, flag[0]):
-                    fobj += " {:<16s} {:<20s}\n".format("", str(flag[0]))
+                    fobj += " {:20s} {:<20s}\n".format('', str(flag[0]))
                                 
         return fobj
 
@@ -679,15 +680,19 @@ def banner():
     print '-----------------------------'
     print
 
+
+
+
 def main():
-    parser = argparse.ArgumentParser(prog='pype', usage='%(prog)s [options]',
+    parser = argparse.ArgumentParser(prog='pftriage', usage='%(prog)s [options]',
                                      description="Show information about a file for triage.")
     parser.add_argument("file", help="The file to triage.")
     parser.add_argument('-i', '--imports', dest='imports', action='store_true', help="Display import tree")
-    parser.add_argument('-s', '--sections', dest='sections', action='store_true', help="Display section information")
+    parser.add_argument('-s', '--sections', dest='sections', action='store_true',
+                        help="Display overview of sections. For more detailed info pass the -v switch")
     parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
-    parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset', help="Dump data using the passed offset or 'ALL'. \
-                                                                           Currently only works with resources.")
+    parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset',
+                        help="Dump data using the passed offset or 'ALL'. Currently only works with resources.")
     parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', default='',
                         help="Alternate PEiD Signature File")
     parser.add_argument('-y', '--yararules', dest='yararules', action='store', default='',
@@ -705,7 +710,6 @@ def main():
     except:
         parser.print_help()
         return -1
-
 
     if args.version:
         # Just exit
