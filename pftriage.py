@@ -156,6 +156,19 @@ class PFTriage(object):
         0x081A: "Serbo-Croatian (Cyrillic)"
     }
 
+    # Common/Default versions
+    linker_versions = {
+        "6.0": "Visual Studio 6",
+        "7.0": "Visual Studio .NET (2002)",
+        "7.1": "Visual Studio .NET 2003",
+        "8.0": "Visual Studio 2005",
+        "9.0": "Visual Studio 2008",
+        "10.0": "Visual Studio 2010",
+        "11.0": "Visual Studio 2012",
+        "12.0": "Visual Studio 2013",
+        "14.0": "Visual Studio 2015"
+    }
+
     def __init__(self, tfile, yararules='', peiddb='', verbose=False, loglevel='Error'):
         
         if not os.path.isfile(tfile):
@@ -279,7 +292,14 @@ class PFTriage(object):
         info['Sections'] = self.pe.FILE_HEADER.NumberOfSections
         info['Entry Point'] = hex(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint)
         info['Subsystem'] = pefile.subsystem_types[self.pe.OPTIONAL_HEADER.Subsystem][0]
-        info['Linker Version'] = '{}.{}'.format(self.pe.OPTIONAL_HEADER.MajorLinkerVersion, self.pe.OPTIONAL_HEADER.MinorLinkerVersion)
+
+        linker = '{}.{}'.format(self.pe.OPTIONAL_HEADER.MajorLinkerVersion, self.pe.OPTIONAL_HEADER.MinorLinkerVersion)
+
+        try:
+            info['Linker Version'] = '{} - ({})'.format(linker, self.linker_versions[linker])
+        except KeyError:
+            info['Linker Version'] = '{}'.format(linker)
+
         info['EP Bytes'] = self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True)
         return info
     
