@@ -4,6 +4,8 @@ pftriage is a tool to help analyze files during malware triage. It allows an ana
 view and extract properties of a file to help during the triage process. The tool also has an
 analyze function which can detect common malicious indicators used by malware.
 
+[![Build Status](https://travis-ci.org/idiom/pftriage.svg?branch=master)](https://travis-ci.org/idiom/pftriage)
+
 Dependencies
 -----
 
