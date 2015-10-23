@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.0.9'
+__version__ = '0.1.0'
 
 import argparse 
 import hashlib 
@@ -210,33 +210,30 @@ class PFTriage(object):
         versioninfo = {}
         varfileinfo = {}
         stringfileinfo = {}
-        if self.pe is not None:
-            try:                
-                for t in self.pe.FileInfo:
-                    if t.name == 'VarFileInfo':
-                        for vardata in t.Var:
-                            for key in vardata.entry:   
-                                try:
-                                    varfileinfo[key] = vardata.entry[key]                                                               
-                                    tparms = vardata.entry[key].split(' ')                                    
-                                    varfileinfo['LangID'] = tparms[0]
-                                    # TODO: Fix this...this is terrible
-                                    varfileinfo['charsetID'] = str(int(tparms[1], 16))
-                                except Exception as e:
-                                    # Todo Update error handling to better support being called from code.
-                                    print e
-                                    
-                    elif t.name == 'StringFileInfo':
-                        for vdata in t.StringTable:
-                            for key in vdata.entries:
-                                stringfileinfo[key] = vdata.entries[key]
-                    else:
-                        versioninfo['unknown'] = 'unknown'
-            except AttributeError as ae:
-                versioninfo['Error'] = ae
-        else:
-            versioninfo['Error'] = 'Not a PE file.'
-        
+        try:
+            for t in self.pe.FileInfo:
+                if t.name == 'VarFileInfo':
+                    for vardata in t.Var:
+                        for key in vardata.entry:
+                            try:
+                                varfileinfo[key] = vardata.entry[key]
+                                tparms = vardata.entry[key].split(' ')
+                                varfileinfo['LangID'] = tparms[0]
+                                # TODO: Fix this...this is terrible
+                                varfileinfo['charsetID'] = str(int(tparms[1], 16))
+                            except Exception as e:
+                                # Todo Update error handling to better support being called from code.
+                                print e
+
+                elif t.name == 'StringFileInfo':
+                    for vdata in t.StringTable:
+                        for key in vdata.entries:
+                            stringfileinfo[key] = vdata.entries[key]
+                else:
+                    versioninfo['unknown'] = 'unknown'
+        except AttributeError as ae:
+            versioninfo['Error'] = ae
+
         versioninfo["VarInfo"] = varfileinfo 
         versioninfo["StringInfo"] = stringfileinfo
         
@@ -254,6 +251,7 @@ class PFTriage(object):
                         
                         
     def getheaderinfo(self):
+        print self.pe.DOS_HEADER
         info = {}
         info['Checksum'] = self.pe.OPTIONAL_HEADER.CheckSum
         info['Compile Time'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
@@ -338,6 +336,7 @@ class PFTriage(object):
                     'createprocess', 'winexec', 'shellexecute', 'httpsendrequest', 'internetreadfile', 'internetconnect',
                     'createservice', 'startservice']
 
+        importwl = ['terminateprocess']
         # Standard section names.
         predef_sections = ['.text', '.bss', '.rdata', '.data', '.rsrc', '.edata', '.idata', '.pdata', '.debug',
                            '.reloc', '.sxdata', '.tls']
@@ -373,6 +372,8 @@ class PFTriage(object):
                         results.append(AnalysisResult(0, 'AntiDebug', 'AntiDebug Function import [%s]' % symbol.name))
                     if symbol.name.lower() in importbl:
                         results.append(AnalysisResult(0, 'Imports', 'Suspicious API Call [%s]' % symbol.name))
+                    if symbol.name.lower() in importwl:
+                        results.append(AnalysisResult(1, 'Imports', 'Suspicious API Call [%s]' % symbol.name))
                     if symbol.name.lower() in dsdcalls:
                         dsd += 1
 
