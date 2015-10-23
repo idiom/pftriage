@@ -4,35 +4,6 @@ __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
 __version__ = '0.0.9'
 
-"""
- --- History ---
-
-  1.19.2015 - Initial Revision
-  1.20.2015 - Fixed import issues and minor bugsThis inspection detects situations when dictionary creation could be rewritten with dictionary literal.
-            - Added sha256 to default output
-            - Updated Stringtable info
-            - Fixed default display
-  1.21.2015 - Fixed output issue with VarOutputInfo
-            - Moved VersionInfo from default output
-  1.22.2015 - Minor updates.
-  2.01.2015 - Added resources
-            - Added option to extract resource data by passing rva_offset or 'ALL'
-            - Updated section output
-  2.03.2015 - Updated resource output
-  2.11.2015 - Removed type lookup when printing resource names
-            - Minor updates
-  3.02.2015 - Updated to use pefile lang/sublang lookups.
-  5.06.2015 - Added analysis option to analzye the file for common indicators of bad
-            - removed -v switch for version info this will be output when printing file details
-  6.07.2015 - updates to analysis checks
-  8.08.2015 - Updated to use python-magic
-            - Added setup.py
-            - Added yara rule scan in analysis
-            - Bug fixes
-  8.16.2015 -
-
-"""
-
 import argparse 
 import hashlib 
 import os
@@ -557,7 +528,7 @@ def print_versioninfo(versioninfo):
                     try:
                         print ' {:<16} {} ({})'.format('charsetID', PFTriage.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8'))
                     except KeyError:
-                        print ' {:<16} {} ({})'.format('charsetID: Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
+                        print ' {:<16} {} ({})'.format('charsetID', 'Error Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
                 else:
                     print ' {:<16} {}'.format(str_entry, vinfo[str_entry].encode('utf-8'))
     print ''
