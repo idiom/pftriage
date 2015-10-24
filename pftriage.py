@@ -251,7 +251,6 @@ class PFTriage(object):
                         
                         
     def getheaderinfo(self):
-        print self.pe.DOS_HEADER
         info = {}
         info['Checksum'] = self.pe.OPTIONAL_HEADER.CheckSum
         info['Compile Time'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
