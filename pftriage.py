@@ -132,7 +132,7 @@ class PFTriage(object):
         "14.0": "Visual Studio 2015"
     }
 
-    def __init__(self, tfile, peiddb='', verbose=False, loglevel='Error'):
+    def __init__(self, tfile, verbose=False, loglevel='Error'):
         
         if not os.path.isfile(tfile):
             raise Exception('Error! File does not exist...')
@@ -142,14 +142,6 @@ class PFTriage(object):
         self.filesize = os.path.getsize(self.filename)
         self.verbose = verbose
         self.loglevel = loglevel
-
-
-        defaultpeidpath = 'data/userdb.txt'
-
-        if not peiddb:
-            self.peiddb = '%s/%s' % (self._getpath(), defaultpeidpath)
-        else:
-            self.peiddb = peiddb
 
         try:
             self.pe = pefile.PE(self.filename)
@@ -376,13 +368,6 @@ class PFTriage(object):
             if section.SizeOfRawData == 0:
                 results.append(AnalysisResult(1, 'Sections', 'Raw Section Size is 0 [%s]' % section.Name.strip('\0')))
 
-        # Scan for peid matches
-        matches = self.scan_signatures(self.peiddb)
-        if matches is not None:
-            for match in matches:
-                results.append(AnalysisResult(2, 'PeID', 'Match [%s]' % match[0]))
-        else:
-            results.append(AnalysisResult(2, 'PeID', 'No Matches'))
 
     def __repr__(self):
         fobj = "\n\n"
@@ -641,8 +626,6 @@ def main():
     parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
     parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset',
                         help="Dump data using the passed offset or 'ALL'. Currently only works with resources.")
-    parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', default='',
-                        help="Alternate PEiD Signature File")
     parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False, help="Display version.")
     parser.add_argument('-V', '--version', dest='version', action='store_true', help="Print version and exit.")
@@ -662,7 +645,7 @@ def main():
         return 0
 
     print '[*] Loading File...'
-    targetfile = PFTriage(args.file, peiddb=args.peidsigs, verbose=args.verbose)
+    targetfile = PFTriage(args.file, verbose=args.verbose)
 
     # if no options are selected print the file details
     if not args.imports and not args.sections and not args.resources and not args.analyze:
