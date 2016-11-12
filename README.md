@@ -9,8 +9,6 @@ Dependencies
 
  * pefile >= 1.2.10-139 - https://github.com/erocarrera/pefile
  * python-magic - https://pypi.python.org/pypi/python-magic/
- * yara - https://pypi.python.org/pypi/yara
- 
  
 Install 
 -----
@@ -35,9 +33,7 @@ optional arguments:
 -r, --resources                     Display resource information   
 -D DUMP_OFFSET, --Dump DUMP_OFFSET
                                     Dump data using the passed offset or 'ALL'.   
-                                    *Currently only works with resources. 
--p PEIDSIGS, --peidsigs PEIDSIGS    Alternate PEiD Signature File 
--y YARARULES, --yararules YARARULES Alternate Yara Rule File 
+                                    *Currently only works with resources.
  ```
  
  

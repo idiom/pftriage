@@ -1,5 +1,10 @@
 #Changelog#
 
+
+##0.1.1##
+
+ - Remove option to run yara and peid during analysis.
+
 ##0.1.0##
 
  **Bug Fixes**
