@@ -22,14 +22,6 @@ try:
 except ImportError:
     pass
 
-use_yara = False
-
-try:
-    import yara
-    use_yara = True
-except ImportError:
-    pass
-
     
 class PFTriage(object):
         
@@ -140,7 +132,7 @@ class PFTriage(object):
         "14.0": "Visual Studio 2015"
     }
 
-    def __init__(self, tfile, yararules='', peiddb='', verbose=False, loglevel='Error'):
+    def __init__(self, tfile, peiddb='', verbose=False, loglevel='Error'):
         
         if not os.path.isfile(tfile):
             raise Exception('Error! File does not exist...')
@@ -151,13 +143,8 @@ class PFTriage(object):
         self.verbose = verbose
         self.loglevel = loglevel
 
-        defaultyarapath = 'data/default.yara'
-        defaultpeidpath = 'data/userdb.txt'
 
-        if not yararules:
-            self.yararules = '%s/%s' % (self._getpath(), defaultyarapath)
-        else:
-            self.yararules = yararules
+        defaultpeidpath = 'data/userdb.txt'
 
         if not peiddb:
             self.peiddb = '%s/%s' % (self._getpath(), defaultpeidpath)
@@ -340,8 +327,6 @@ class PFTriage(object):
         predef_sections = ['.text', '.bss', '.rdata', '.data', '.rsrc', '.edata', '.idata', '.pdata', '.debug',
                            '.reloc', '.sxdata', '.tls']
 
-
-
         # Get filetype
         results.append(AnalysisResult(2, 'File Type', self.magic_type(self.filename)))
 
@@ -398,34 +383,6 @@ class PFTriage(object):
                 results.append(AnalysisResult(2, 'PeID', 'Match [%s]' % match[0]))
         else:
             results.append(AnalysisResult(2, 'PeID', 'No Matches'))
-
-        # Run yara rules
-        # TODO: Look at how to retern verbose rule info. This may be useful for upstream callers
-        if use_yara:
-            try:
-                ymatches = self.yara_scan()
-                if len(ymatches) > 0:
-                    for sections in ymatches:
-                        for match in ymatches[sections]:
-                            if match['matches']:
-                                # Check if the rule metadata has a severity field and use it otherwise default to sev 2
-                                if 'severity' in match['meta']:
-                                    results.append(AnalysisResult(match['meta']['severity'], 'Yara Rule', '%s' % match['rule']))
-                                else:
-                                    results.append(AnalysisResult(2, 'Yara Rule', 'Match [%s]' % match['rule']))
-                else:
-                    results.append(AnalysisResult(2, 'Yara Rule', 'No Matches'))
-            except Exception as e:
-                results.append(AnalysisResult(2, 'Yara Rule', 'Error running yara rules: %s' % e))
-        else:
-            results.append(AnalysisResult(0, 'Yara Rule', 'Yara not run.'))
-
-        return results
-
-    def yara_scan(self):
-        rules = yara.compile(self.yararules)
-        matches = rules.match(data=self.pe.__data__)
-        return matches
 
     def __repr__(self):
         fobj = "\n\n"
@@ -686,8 +643,6 @@ def main():
                         help="Dump data using the passed offset or 'ALL'. Currently only works with resources.")
     parser.add_argument('-p', '--peidsigs', dest='peidsigs', action='store', default='',
                         help="Alternate PEiD Signature File")
-    parser.add_argument('-y', '--yararules', dest='yararules', action='store', default='',
-                        help="Alternate Yara Rule File")
     parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False, help="Display version.")
     parser.add_argument('-V', '--version', dest='version', action='store_true', help="Print version and exit.")
@@ -707,7 +662,7 @@ def main():
         return 0
 
     print '[*] Loading File...'
-    targetfile = PFTriage(args.file, yararules=args.yararules, peiddb=args.peidsigs, verbose=args.verbose)
+    targetfile = PFTriage(args.file, peiddb=args.peidsigs, verbose=args.verbose)
 
     # if no options are selected print the file details
     if not args.imports and not args.sections and not args.resources and not args.analyze:
