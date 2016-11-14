@@ -4,23 +4,12 @@ __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
 __version__ = '0.1.0'
 
-import argparse 
 import hashlib 
 import os
 import time
-import sys
-
-try:
-    import pefile
-    import peutils
-except Exception as e:
-    print 'Error - Please ensure you install the pefile library %s ' % e
-    sys.exit(-1)
-
-try:
-    import magic
-except ImportError:
-    pass
+import pefile
+import peutils
+import magic
 
     
 class PFTriage(object):
@@ -142,11 +131,7 @@ class PFTriage(object):
         self.filesize = os.path.getsize(self.filename)
         self.verbose = verbose
         self.loglevel = loglevel
-
-        #try:
         self.pe = pefile.PE(self.filename)
-        #except Exception as per:
-        #    sys.exit('Error! %s' % per)
 
         self.metadata = self._populate_metadata()
         self.hashes = self._calcHashes()
@@ -569,7 +554,7 @@ def print_sections(target):
                                                         "Virtual Size",
                                                         "Entropy",
                                                         "Hash")
-    
+
         for section in target.pe.sections:
             sdata += " {:10}".format(section.Name.strip('\0'))
             sdata += "{:12}".format("{0:#0{1}x}".format(section.SizeOfRawData, 10))
@@ -603,68 +588,4 @@ def print_sections(target):
             sdata += '\n'
 
     print sdata
-
-
-def banner():
-    os.system('cls' if os.name == 'nt' else 'clear')
-    print
-    print '-----------------------------'
-    print
-    print '  pftriage %s' % __version__
-    print
-    print '-----------------------------'
-    print
-
-def main():
-    parser = argparse.ArgumentParser(prog='pftriage', usage='%(prog)s [options]',
-                                     description="Show information about a file for triage.")
-    parser.add_argument("file", help="The file to triage.")
-    parser.add_argument('-i', '--imports', dest='imports', action='store_true', help="Display import tree")
-    parser.add_argument('-s', '--sections', dest='sections', action='store_true',
-                        help="Display overview of sections. For more detailed info pass the -v switch")
-    parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
-    parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset',
-                        help="Dump data using the passed offset or 'ALL'. Currently only works with resources.")
-    parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
-    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False, help="Display version.")
-    parser.add_argument('-V', '--version', dest='version', action='store_true', help="Print version and exit.")
-
-
-    # display banner
-    banner()
-
-    try:
-        args = parser.parse_args()
-    except:
-        parser.print_help()
-        return -1
-
-    if args.version:
-        # Just exit
-        return 0
-
-    print '[*] Loading File...'
-    targetfile = PFTriage(args.file, verbose=args.verbose)
-
-    # if no options are selected print the file details
-    if not args.imports and not args.sections and not args.resources and not args.analyze:
-        print '[*] Processing File details...'
-        print targetfile
-        print '[*] Loading Version Info'
-        print_versioninfo(targetfile.getstringentries())
-
-    if args.analyze:
-        print_analysis(targetfile)
-    
-    if args.imports:
-        print_imports(targetfile.listimports())
-    
-    if args.sections:
-        print_sections(targetfile)
-        
-    if args.resources:
-        print_resources(targetfile, args.dump_offset)
-
-if __name__ == '__main__':
-    main()
 
