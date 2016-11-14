@@ -143,10 +143,13 @@ class PFTriage(object):
         self.verbose = verbose
         self.loglevel = loglevel
 
-        try:
-            self.pe = pefile.PE(self.filename)
-        except Exception as per:
-            sys.exit('Error! %s' % per)
+        #try:
+        self.pe = pefile.PE(self.filename)
+        #except Exception as per:
+        #    sys.exit('Error! %s' % per)
+
+        self.metadata = self._populate_metadata()
+        self.hashes = self._calcHashes()
 
     def _getpath(self):
         return os.path.abspath(os.path.dirname(__file__))
@@ -227,28 +230,6 @@ class PFTriage(object):
             # Todo Update error handling to better support being called from code.
             print 'Error processing imports - %s ' % e
         return modules
-                        
-                        
-    def getheaderinfo(self):
-        info = {}
-        info['Checksum'] = self.pe.OPTIONAL_HEADER.CheckSum
-        info['Compile Time'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
-        info['Signature'] = hex(self.pe.NT_HEADERS.Signature)
-        info['Packed'] = peutils.is_probably_packed(self.pe)
-        info['Image Base'] = hex(self.pe.OPTIONAL_HEADER.ImageBase)
-        info['Sections'] = self.pe.FILE_HEADER.NumberOfSections
-        info['Entry Point'] = hex(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint)
-        info['Subsystem'] = pefile.subsystem_types[self.pe.OPTIONAL_HEADER.Subsystem][0]
-
-        linker = '{}.{}'.format(self.pe.OPTIONAL_HEADER.MajorLinkerVersion, self.pe.OPTIONAL_HEADER.MinorLinkerVersion)
-
-        try:
-            info['Linker Version'] = '{} - ({})'.format(linker, self.linker_versions[linker])
-        except KeyError:
-            info['Linker Version'] = '{}'.format(linker)
-
-        info['EP Bytes'] = self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True)
-        return info
     
     def getfuzzyhash(self):
         try:
@@ -368,6 +349,44 @@ class PFTriage(object):
             if section.SizeOfRawData == 0:
                 results.append(AnalysisResult(1, 'Sections', 'Raw Section Size is 0 [%s]' % section.Name.strip('\0')))
 
+        return results
+
+    def _populate_metadata(self):
+        metadata = {}
+        metadata['Filename'] = self.filename
+        metadata['Magic Type'] = self.magic_type(self.filename)
+        metadata['Size'] = self.filesize
+        metadata['First Bytes'] = self.getbytestring(0, 16)
+
+
+        metadata['Checksum'] = self.pe.OPTIONAL_HEADER.CheckSum
+        metadata['Compile Time'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
+        metadata['Signature'] = hex(self.pe.NT_HEADERS.Signature)
+        metadata['Packed'] = peutils.is_probably_packed(self.pe)
+        metadata['Image Base'] = hex(self.pe.OPTIONAL_HEADER.ImageBase)
+        metadata['Sections'] = self.pe.FILE_HEADER.NumberOfSections
+        metadata['Entry Point'] = hex(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint)
+        metadata['Subsystem'] = pefile.subsystem_types[self.pe.OPTIONAL_HEADER.Subsystem][0]
+
+        linker = '{}.{}'.format(self.pe.OPTIONAL_HEADER.MajorLinkerVersion, self.pe.OPTIONAL_HEADER.MinorLinkerVersion)
+
+        try:
+            metadata['Linker Version'] = '{} - ({})'.format(linker, self.linker_versions[linker])
+        except KeyError:
+            metadata['Linker Version'] = '{}'.format(linker)
+
+        metadata['EP Bytes'] = self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True)
+
+        return metadata
+
+    def _calcHashes(self):
+        hashes = {}
+        hashes["md5"] = self.gethash('md5')
+        hashes["sha1"] = self.gethash('sha1')
+        hashes["sha256"] = self.gethash('sha256')
+        hashes["Import Hash"] = self.getimphash()
+        hashes["SSDeep"] = self.getfuzzyhash()
+        return hashes
 
     def __repr__(self):
         fobj = "\n\n"
@@ -407,23 +426,6 @@ class AnalysisResult:
         self.severity = severity
         self.restype = restype
         self.message = message
-
-
-    def _formatmsg(self, sev, string):
-        # 31 - Error
-        # 33 - Warning
-        # 37 - Info
-        if sev == 0:
-            return "\033[31m [!] %s \033[0m" % string
-        elif sev == 1:
-            return "\033[33m [!] %s \033[0m" % string
-        elif sev == 2:
-            return "\033[37m [*] %s \033[0m" % string
-        else:
-            return " [*] " + string
-
-    def __repr__(self):
-        return ' {:<30s}{:<20s}'.format(self._formatmsg(self.severity, self.restype), self.message)
 
 def print_imports(modules):
 
@@ -612,9 +614,6 @@ def banner():
     print
     print '-----------------------------'
     print
-
-
-
 
 def main():
     parser = argparse.ArgumentParser(prog='pftriage', usage='%(prog)s [options]',
