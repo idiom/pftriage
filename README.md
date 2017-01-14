@@ -18,23 +18,23 @@ If you want to install the script run 'python setup.py install'
 Usage
 -----
 ```
-pftriage.py [-h] [-i] [-s] [-r] [-a] [-p] [-y] file
+Usage: pftriage [OPTIONS] COMMAND [ARGS]...
 
-Show information about a file.  
-  
-positional arguments:  
-  file            The target file.  
-  
-optional arguments:    
--h, --help                          Show this help message and exit  
--i, --imports                       Display import tree  
--a, --analyze                       Analyze the file for common malware indicators  
--s, --sections                      Display section information  
--r, --resources                     Display resource information   
--D DUMP_OFFSET, --Dump DUMP_OFFSET
-                                    Dump data using the passed offset or 'ALL'.   
-                                    *Currently only works with resources.
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  analyze    Perform a basic analysis on the file
+  imports    Display library imports
+  metadata   Display file metadata
+  resources  Display file resource data
+  sections   Display section information about the file
+
  ```
+
+
+
+
  
  
   

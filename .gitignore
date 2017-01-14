@@ -54,3 +54,6 @@ docs/_build/
 target/
 
 test_files/
+
+#IDE
+.idea/
