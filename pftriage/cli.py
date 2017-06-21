@@ -17,43 +17,56 @@ def metadata(target):
     """Display file metadata"""
     target = PFTriage(target)
     click.echo('[*] Processing File details...')
-    click.echo(target.metadata)
-    click.echo(target.hashes)
-    click.echo('[*] Loading Version Info')
+    click.echo('Hashes')
+    for hash in target.hashes:
+        click.echo('{:4}{:<16} {}'.format('', hash, target.hashes[hash]))
+
+    click.echo('File Details')
+    for key in target.metadata:
+        click.echo('{:4}{:<16} {}'.format('',key, target.metadata[key]))
+
+    flags = target.get_image_flags()
+    click.echo('{:4}{:<16}'.format('', "Characteristics"))
+    for flag in flags:
+        click.echo('{:20s} {:<20s}'.format('', flag))
+
     print_versioninfo(target.getstringentries())
 
 
 def print_versioninfo(versioninfo):
 
     # output the version info blocks.
-    click.echo('\n---- Version Info ----  \n')
+    click.echo('')
+    click.echo('{:4}{:<16}'.format('', 'Version Info'))
     if 'StringInfo' in versioninfo:
         sinfo = versioninfo['StringInfo']
         if len(sinfo) == 0:
-            click.echo(' No version info block...')
+            click.echo('{:4} {}'.format('', 'No version info block...'))
         else:
             for str_entry in sinfo:
-                click.echo(' {:<16} {}'.format(str_entry, sinfo[str_entry].encode('utf-8')))
+                click.echo('{:4}{:<16} {}'.format('', str_entry, sinfo[str_entry].encode('utf-8')))
 
+    click.echo('')
+    click.echo('{:4}{:<16}'.format('', 'Language Info'))
     if 'VarInfo' in versioninfo:
         vinfo = versioninfo['VarInfo']
         if len(vinfo) == 0:
-            click.echo(' No language info block...')
+            click.echo('{:4} {}'.format('', 'No language info block...'))
         else:
             print ''
             for str_entry in vinfo:
                 if str_entry == 'LangID':
                     try:
-                        click.echo(' {:<16} {} ({})'.format('LangID', PFTriage.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8')))
+                        click.echo('{:4}{:<16} {} ({})'.format('', 'LangID', PFTriage.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8')))
                     except KeyError:
-                        click.echo(' {:<16} {} ({})'.format('LangID', 'Invalid Identifier!', vinfo[str_entry].encode('utf-8')))
+                        click.echo('{:4}{:<16} {} ({})'.format('', 'LangID', 'Invalid Identifier!', vinfo[str_entry].encode('utf-8')))
                 elif str_entry == 'charsetID':
                     try:
-                        click.echo(' {:<16} {} ({})'.format('charsetID', PFTriage.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8')))
+                        click.echo('{:4}{:<16} {} ({})'.format('', 'charsetID', PFTriage.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8')))
                     except KeyError:
-                        click.echo(' {:<16} {} ({})'.format('charsetID', 'Error Invalid Identifier!', vinfo[str_entry].encode('utf-8')))
+                        click.echo('{:4}{:<16} {} ({})'.format('', 'charsetID', 'Error Invalid Identifier!', vinfo[str_entry].encode('utf-8')))
                 else:
-                    click.echo(' {:<16} {}'.format(str_entry, vinfo[str_entry].encode('utf-8')))
+                    click.echo('{:4}{:<16} {}'.format('', str_entry, vinfo[str_entry].encode('utf-8')))
     click.echo('')
 
 @cli.command(context_settings=CONTEXT_SETTINGS)

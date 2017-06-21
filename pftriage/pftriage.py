@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 import hashlib 
 import os
@@ -10,7 +10,6 @@ import time
 import pefile
 import peutils
 import magic
-
     
 class PFTriage(object):
         
@@ -138,6 +137,15 @@ class PFTriage(object):
 
     def _getpath(self):
         return os.path.abspath(os.path.dirname(__file__))
+
+    def get_image_flags(self, imageflags='IMAGE_FILE_'):
+        iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, imageflags)
+        flags = []
+        for flag in iflags:
+            if getattr(self.pe.FILE_HEADER, flag[0]):
+                flags.append(flag[0])
+        return flags
+
 
     def magic_type(self, data, isdata=False):
         try:
@@ -343,7 +351,6 @@ class PFTriage(object):
         metadata['Size'] = self.filesize
         metadata['First Bytes'] = self.getbytestring(0, 16)
 
-
         metadata['Checksum'] = self.pe.OPTIONAL_HEADER.CheckSum
         metadata['Compile Time'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
         metadata['Signature'] = hex(self.pe.NT_HEADERS.Signature)
@@ -366,9 +373,9 @@ class PFTriage(object):
 
     def _calcHashes(self):
         hashes = {}
-        hashes["md5"] = self.gethash('md5')
-        hashes["sha1"] = self.gethash('sha1')
-        hashes["sha256"] = self.gethash('sha256')
+        hashes["MD5"] = self.gethash('md5')
+        hashes["SHA1"] = self.gethash('sha1')
+        hashes["SHA256"] = self.gethash('sha256')
         hashes["Import Hash"] = self.getimphash()
         hashes["SSDeep"] = self.getfuzzyhash()
         return hashes
@@ -391,9 +398,6 @@ class PFTriage(object):
         fobj += ' Headers\n'
 
         if self.pe is not None:
-            hinfo = self.getheaderinfo()
-            for str_key in hinfo:
-                fobj += ' {:4}{:<16} {}\n'.format('', str_key, hinfo[str_key])
             iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
 
             flags = []
@@ -427,42 +431,6 @@ def print_imports(modules):
             else:
                 print '  |-- %s' % symbol.name
     print '\n\n'
-
-
-def print_versioninfo(versioninfo):
-
-    # output the version info blocks.
-    print '\n---- Version Info ----  \n'
-    if 'StringInfo' in versioninfo:
-        sinfo = versioninfo['StringInfo']
-        if len(sinfo) == 0:
-            print ' No version info block...'
-        else:
-            for str_entry in sinfo:
-                print ' {:<16} {}'.format(str_entry, sinfo[str_entry].encode('utf-8'))
-
-    if 'VarInfo' in versioninfo:
-        vinfo = versioninfo['VarInfo']
-        if len(vinfo) == 0:
-            print ' No language info block...'
-        else:
-            print ''
-            for str_entry in vinfo:
-                if str_entry == 'LangID':
-                    try:
-                        print ' {:<16} {} ({})'.format('LangID', PFTriage.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8'))
-                    except KeyError:
-                        print ' {:<16} {} ({})'.format('LangID', 'Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
-                elif str_entry == 'charsetID':
-                    try:
-                        print ' {:<16} {} ({})'.format('charsetID', PFTriage.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8'))
-                    except KeyError:
-                        print ' {:<16} {} ({})'.format('charsetID', 'Error Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
-                else:
-                    print ' {:<16} {}'.format(str_entry, vinfo[str_entry].encode('utf-8'))
-    print ''
-
-    
 
 def print_resources(target, dumprva):
     try:
