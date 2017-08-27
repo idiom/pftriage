@@ -2,15 +2,19 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.1.1'
+__version__ = '0.2.0'
 
 import hashlib 
 import os
 import time
 import pefile
 import peutils
-import magic
-    
+import argparse
+#import magic
+
+
+
+
 class PFTriage(object):
         
     # https://msdn.microsoft.com/en-us/library/ms648009(v=vs.85).aspx
@@ -146,7 +150,6 @@ class PFTriage(object):
                 flags.append(flag[0])
         return flags
 
-
     def magic_type(self, data, isdata=False):
         try:
             if isdata:
@@ -180,6 +183,49 @@ class PFTriage(object):
             ihash = 'No imphash support, upgrade pefile to a version >= 1.2.10-139'
         finally:
             return ihash
+
+    def process_overlay_data(self, action):
+        """
+        Remove any overlay data appened to the PE file.
+
+        Actions
+        0 - Remove
+        1 - Extract
+
+        :return:
+        """
+
+        overlay = self.detect_overlay()
+        if overlay > 0:
+            with open(self.filename, 'rb') as rf:
+                raw = rf.read()
+            if action == 0:
+                out_data = raw[:overlay]
+            elif action == 1:
+                out_data = raw[overlay:]
+            else:
+                raise Exception('Unknown Action!')
+            return out_data
+        else:
+            return ""
+
+
+    def remove_overlay_data(self):
+        """
+        Remove any overlay data appened to the PE file.
+
+        :return:
+        """
+
+        overlay = self.detect_overlay()
+        if overlay > 0:
+            with open(self.filename,'rb') as rf:
+                raw = rf.read()
+            out_data = raw[:overlay]
+            return out_data
+        else:
+            return ""
+
     
     def getstringentries(self):
         versioninfo = {}
@@ -262,6 +308,9 @@ class PFTriage(object):
         matches = sigs.match_all(self.pe, ep_only=True)
         return matches
 
+    def detect_overlay(self):
+        return self.pe.get_overlay_data_start_offset()
+
     def analyze(self):
         """
 
@@ -294,13 +343,16 @@ class PFTriage(object):
                            '.reloc', '.sxdata', '.tls']
 
         # Get filetype
-        results.append(AnalysisResult(2, 'File Type', self.magic_type(self.filename)))
+        # results.append(AnalysisResult(2, 'File Type', self.magic_type(self.filename)))
 
         if not self.pe.verify_checksum():
             results.append(AnalysisResult(0, 'Checksum', "Invalid CheckSum"))
 
         if peutils.is_probably_packed(self.pe):
             results.append(AnalysisResult(1, 'Packed', "Sample is probably packed"))
+
+        if self.detect_overlay() > 0:
+            results.append(AnalysisResult(1, 'Overlay', "Detected Overlay [%s]" % hex(self.detect_overlay())))
 
         modules = self.listimports()
         impcount = len(modules)
@@ -347,7 +399,7 @@ class PFTriage(object):
     def _populate_metadata(self):
         metadata = {}
         metadata['Filename'] = self.filename
-        metadata['Magic Type'] = self.magic_type(self.filename)
+        #metadata['Magic Type'] = self.magic_type(self.filename)
         metadata['Size'] = self.filesize
         metadata['First Bytes'] = self.getbytestring(0, 16)
 
@@ -398,6 +450,11 @@ class PFTriage(object):
         fobj += ' Headers\n'
 
         if self.pe is not None:
+            #hinfo = self.getheaderinfo()
+            for str_key in self.metadata:
+                fobj += ' {:4}{:<16} {}\n'.format('', str_key, self.metadata[str_key])
+
+
             iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
 
             flags = []
@@ -415,6 +472,23 @@ class AnalysisResult:
         self.severity = severity
         self.restype = restype
         self.message = message
+
+    def _formatmsg(self, sev, string):
+        # 31 - Error
+        # 33 - Warning
+        # 37 - Info
+        if sev == 0:
+            return "\033[31m [!] %s \033[0m" % string
+        elif sev == 1:
+            return "\033[33m [!] %s \033[0m" % string
+        elif sev == 2:
+            return "\033[37m [*] %s \033[0m" % string
+        else:
+            return " [*] " + string
+
+    def __repr__(self):
+        return ' {:<30s}{:<20s}'.format(self._formatmsg(self.severity, self.restype), self.message)
+
 
 def print_imports(modules):
 
@@ -484,8 +558,8 @@ def print_resources(target, dumprva):
                         data += '{:12}'.format(offset)
                         data += '{:12}'.format("{0:#0{1}x}".format(resentry.data.struct.Size, 10))
                         data += '{:12}'.format("{0:#0{1}x}".format(resentry.data.struct.CodePage, 10))
-                        data += '{:64}'.format(target.magic_type(target.extractdata(resentry.data.struct.OffsetToData,
-                                                                                   resentry.data.struct.Size)[:64], True))
+                        #data += '{:64}'.format(target.magic_type(target.extractdata(resentry.data.struct.OffsetToData,
+                                                                                   #resentry.data.struct.Size)[:64], True))
                         
                         if dumpaddress == 'ALL' or dumpaddress == offset:
                             data += '\n\n  Matched offset[%s] -- dumping resource' % dumpaddress
@@ -500,6 +574,12 @@ def print_resources(target, dumprva):
 
 
 def print_analysis(target):
+    """
+    Print out the analysis results for the file.
+
+    :param target:
+    :return:
+    """
 
     print '[*] Analyzing File...'
     results = target.analyze()
@@ -507,7 +587,7 @@ def print_analysis(target):
     print
     for analysis_result in results:
         print analysis_result
-    print ''
+    print
 
 
 def print_sections(target):
@@ -515,7 +595,7 @@ def print_sections(target):
     if not target.verbose:
 
         sdata = "\n ---- Section Overview (use -v for detailed section info)  ----  \n\n"
-        sdata += " {:10}{:12}{:18}{:20}{:20}{:20}{:20}\n".format("Name",
+        sdata += " {:12}{:12}{:18}{:20}{:20}{:20}{:20}\n".format("Name",
                                                         "Raw Size",
                                                         "Raw Data Pointer",
                                                         "Virtual Address",
@@ -524,7 +604,7 @@ def print_sections(target):
                                                         "Hash")
 
         for section in target.pe.sections:
-            sdata += " {:10}".format(section.Name.strip('\0'))
+            sdata += " {:12}".format(section.Name.strip('\0'))
             sdata += "{:12}".format("{0:#0{1}x}".format(section.SizeOfRawData, 10))
             sdata += "{:18}".format("{0:#0{1}x}".format(section.PointerToRawData, 10))
             sdata += "{:20}".format("{0:#0{1}x}".format(section.VirtualAddress, 10))
@@ -532,6 +612,27 @@ def print_sections(target):
             sdata += "{:<20}".format(section.get_entropy())
             sdata += "{:<20}".format(hashlib.md5(section.get_data()).hexdigest())
             sdata += "\n"
+
+        overlay = target.detect_overlay()
+        if overlay > 0:
+            overlay_size = target.filesize - overlay
+            #overlay_size = 0
+            #with open(target.filename,'rb') as rf:
+            #    raw_file = rf.read()
+
+            #overlay_size = len(raw_file[overlay:])
+            #print overlay_size
+
+            sdata += " {:12}".format('.overlay')
+            sdata += "{:12}".format("{0:#0{1}x}".format(overlay_size,10))
+            sdata += "{:18}".format(hex(overlay))
+            sdata += "{:20}".format('0x00000000')
+            sdata += "{:20}".format('0x00000000')
+            sdata += "{:<20}".format('0')
+            sdata += "{:<20}".format('N/A')
+            sdata += "\n"
+
+
 
     else:
         cflags = pefile.retrieve_flags(pefile.SECTION_CHARACTERISTICS, 'IMAGE_SCN_')
@@ -557,3 +658,141 @@ def print_sections(target):
 
     print sdata
 
+
+def print_versioninfo(versioninfo):
+
+    # output the version info blocks.
+    print '\n---- Version Info ----  \n'
+    if 'StringInfo' in versioninfo:
+        sinfo = versioninfo['StringInfo']
+        if len(sinfo) == 0:
+            print ' No version info block...'
+        else:
+            for str_entry in sinfo:
+                print ' {:<16} {}'.format(str_entry, sinfo[str_entry].encode('utf-8'))
+
+    if 'VarInfo' in versioninfo:
+        vinfo = versioninfo['VarInfo']
+        if len(vinfo) == 0:
+            print ' No language info block...'
+        else:
+            print ''
+            for str_entry in vinfo:
+                if str_entry == 'LangID':
+                    try:
+                        print ' {:<16} {} ({})'.format('LangID', PFTriage.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8'))
+                    except KeyError:
+                        print ' {:<16} {} ({})'.format('LangID', 'Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
+                elif str_entry == 'charsetID':
+                    try:
+                        print ' {:<16} {} ({})'.format('charsetID', PFTriage.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8'))
+                    except KeyError:
+                        print ' {:<16} {} ({})'.format('charsetID', 'Error Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
+                else:
+                    print ' {:<16} {}'.format(str_entry, vinfo[str_entry].encode('utf-8'))
+    print ''
+
+
+def remove_overlay(targetfile):
+    print ' [*] Removing Overlay data...'
+    data = targetfile.process_overlay_data(0)
+    if len(data) == 0:
+        print ' [!] No overlay data detected...skipping'
+        return
+
+    print ' [*] Writing cleaned file to %s-cleaned' % targetfile.filename
+    with open('%s-cleaned' % targetfile.filename,'wb') as out:
+        out.write(data)
+    return
+
+def extract_overlay(targetfile):
+    print ' [*] Removing Overlay data...'
+    data = targetfile.process_overlay_data(1)
+    if len(data) == 0:
+        print ' [!] No overlay data detected...skipping'
+        return
+
+    print ' [*] Writing extracted data to file to %s-overlay' % targetfile.filename
+    with open('%s-overlay' % targetfile.filename,'wb') as out:
+        out.write(data)
+    return
+
+
+def banner():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print
+    print '-----------------------------'
+    print
+    print '  pftriage %s' % __version__
+    print
+    print '-----------------------------'
+    print
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='pftriage', usage='%(prog)s [options]',
+                                     description="Show information about a file for triage.")
+    parser.add_argument("file", help="The file to triage.")
+    parser.add_argument('-i', '--imports', dest='imports', action='store_true', help="Display import tree")
+    parser.add_argument('-s', '--sections', dest='sections', action='store_true',
+                        help="Display overview of sections. For more detailed info pass the -v switch")
+    parser.add_argument('--removeoverlay', dest='rol', action='store_true', default=False,
+                        help="Remove overlay data.")
+    parser.add_argument('--extractoverlay', dest='eol', action='store_true', default=False,
+                        help="Extract overlay data.")
+    parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
+    parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset',
+                        help="Dump data using the passed offset or 'ALL'. Currently only works with resources.")
+    parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False, help="Display version.")
+    parser.add_argument('-V', '--version', dest='version', action='store_true', help="Print version and exit.")
+
+    # display banner
+    banner()
+
+    try:
+        args = parser.parse_args()
+    except:
+        #parser.print_help()
+        return -1
+
+    if args.version:
+        # Just exit
+        return 0
+
+    print '[*] Loading File...'
+    targetfile = PFTriage(args.file, verbose=args.verbose)
+
+    if args.analyze:
+        print_analysis(targetfile)
+        return
+
+    if args.imports:
+        print_imports(targetfile.listimports())
+        return
+
+    if args.sections:
+        print_sections(targetfile)
+        return
+
+    if args.resources:
+        print_resources(targetfile, args.dump_offset)
+        return
+
+    # Remove Overlay
+    if args.rol:
+        remove_overlay(targetfile)
+        return
+
+    if args.eol:
+        extract_overlay(targetfile)
+        return
+
+    # if no options are selected print the file details
+    print '[*] Processing File details...'
+    print targetfile
+    print '[*] Loading Version Info'
+    print_versioninfo(targetfile.getstringentries())
+
+if __name__ == '__main__':
+    main()
