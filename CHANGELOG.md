@@ -1,6 +1,15 @@
 #Changelog#
 
 
+##0.2.0##
+
+ - Removed use of click lib for cli Tool. 
+ - Added .overlay output to section information
+ - Added option to remove overlay data
+ - Added option to extract overlay data
+ - Changed to use filemagic lib
+ - Minor bug fixes
+
 ##0.1.1##
 
  - Remove option to run yara and peid during analysis.

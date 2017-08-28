@@ -1,14 +1,19 @@
 # pftriage  [![Build Status](https://travis-ci.org/idiom/pftriage.svg?branch=master)](https://travis-ci.org/idiom/pftriage)
 
+
 pftriage is a tool to help analyze files during malware triage. It allows an analyst to quickly 
 view and extract properties of a file to help during the triage process. The tool also has an
 analyze function which can detect common malicious indicators used by malware.
 
 # Dependencies
 
- * pefile >= 1.2.10-139 - https://github.com/erocarrera/pefile
- * python-magic - https://pypi.python.org/pypi/python-magic/
-  
+ * pefile
+ * filemagic 
+ 
+_Note: On Mac - Apple has implemented their own version of the file command. However, libmagic can be installed using homebrew_
+```
+$ brew install libmagic
+```  
 
 # Usage
 
@@ -117,7 +122,7 @@ File and version metadata is displayed if no options are passed on the commandli
 
  General
      Filename         samaple.exe
-     Magic Type       
+     Magic Type       PE32 executable (GUI) Intel 80386, for MS Windows
      Size             135168
      First Bytes      4d 5a 90 00 03 00 00 00 04 00 00 00 ff ff 00 00
 
@@ -148,7 +153,6 @@ File and version metadata is displayed if no options are passed on the commandli
                       IMAGE_FILE_RELOCS_STRIPPED
 
 ```
-
 
 
 ## Analyze 
