@@ -10,7 +10,7 @@ import time
 import pefile
 import peutils
 import argparse
-#import magic
+import magic
 
 
 
@@ -152,10 +152,11 @@ class PFTriage(object):
 
     def magic_type(self, data, isdata=False):
         try:
-            if isdata:
-                magictype = magic.from_buffer(data)
-            else:
-                magictype = magic.from_file(data)
+            with magic.Magic() as m:
+                if isdata:
+                    magictype = m.id_buffer(data)
+                else:
+                    magictype = m.id_filename(data)
         except NameError:
             magictype = 'Error - python-magic library required.'
         except Exception as e:
@@ -720,13 +721,16 @@ def extract_overlay(targetfile):
 
 def banner():
     os.system('cls' if os.name == 'nt' else 'clear')
-    print
-    print '-----------------------------'
-    print
-    print '  pftriage %s' % __version__
-    print
-    print '-----------------------------'
-    print
+    banner = """
+        ________________________________      .__                       
+        \______   \_   _____/\__    ___/______|__|____     ____   ____  
+         |     ___/|    __)    |    |  \_  __ \  \__  \   / ___\_/ __ \ 
+         |    |    |     \     |    |   |  | \/  |/ __ \_/ /_/  >  ___/ 
+         |____|    \___  /     |____|   |__|  |__(____  /\___  / \___  >
+                       \/                             \//_____/      \/ 
+                                                                        %s
+    """ % __version__
+    print banner
 
 
 def main():
@@ -753,7 +757,6 @@ def main():
     try:
         args = parser.parse_args()
     except:
-        #parser.print_help()
         return -1
 
     if args.version:
