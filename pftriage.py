@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 import hashlib 
 import os
@@ -10,9 +10,6 @@ import time
 import pefile
 import peutils
 import argparse
-import magic
-
-
 
 
 class PFTriage(object):
@@ -132,9 +129,9 @@ class PFTriage(object):
         self.filename = tfile
         self.pe       = None
         self.filesize = os.path.getsize(self.filename)
-        self.verbose = verbose
+        self.verbose  = verbose
         self.loglevel = loglevel
-        self.pe = pefile.PE(self.filename)
+        self.pe       = pefile.PE(self.filename)
 
         self.metadata = self._populate_metadata()
         self.hashes = self._calcHashes()
@@ -158,7 +155,7 @@ class PFTriage(object):
                 else:
                     magictype = m.id_filename(data)
         except NameError:
-            magictype = 'Error - python-magic library required.'
+            magictype = 'Error - filemagic library required.'
         except Exception as e:
             magictype = 'Error getting magic type - %s' % e
         return magictype
@@ -187,12 +184,9 @@ class PFTriage(object):
 
     def process_overlay_data(self, action):
         """
-        Remove any overlay data appened to the PE file.
+        Process overlay data
 
-        Actions
-        0 - Remove
-        1 - Extract
-
+        :param action:
         :return:
         """
 
@@ -210,7 +204,6 @@ class PFTriage(object):
         else:
             return ""
 
-
     def remove_overlay_data(self):
         """
         Remove any overlay data appened to the PE file.
@@ -227,7 +220,6 @@ class PFTriage(object):
         else:
             return ""
 
-    
     def getstringentries(self):
         versioninfo = {}
         varfileinfo = {}
@@ -400,7 +392,7 @@ class PFTriage(object):
     def _populate_metadata(self):
         metadata = {}
         metadata['Filename'] = self.filename
-        #metadata['Magic Type'] = self.magic_type(self.filename)
+        metadata['Magic Type'] = self.magic_type(self.filename)
         metadata['Size'] = self.filesize
         metadata['First Bytes'] = self.getbytestring(0, 16)
 
@@ -425,12 +417,8 @@ class PFTriage(object):
         return metadata
 
     def _calcHashes(self):
-        hashes = {}
-        hashes["MD5"] = self.gethash('md5')
-        hashes["SHA1"] = self.gethash('sha1')
-        hashes["SHA256"] = self.gethash('sha256')
-        hashes["Import Hash"] = self.getimphash()
-        hashes["SSDeep"] = self.getfuzzyhash()
+        hashes = {"MD5": self.gethash('md5'), "SHA1":self.gethash('sha1'), "SHA256": self.gethash('sha256'),
+                  "Import Hash": self.getimphash(), "SSDeep": self.getfuzzyhash()}
         return hashes
 
     def __repr__(self):
@@ -507,6 +495,7 @@ def print_imports(modules):
                 print '  |-- %s' % symbol.name
     print '\n\n'
 
+
 def print_resources(target, dumprva):
     try:
         dumpaddress = dumprva[0]
@@ -514,7 +503,6 @@ def print_resources(target, dumprva):
         dumpaddress = 0
     
     data = "\n ---- Resource Overview ----  \n\n"
-
 
     try:
         resdir = target.pe.DIRECTORY_ENTRY_RESOURCE
@@ -553,7 +541,11 @@ def print_resources(target, dumprva):
                 for resentry in resname.directory.entries:
                     if hasattr(resentry, 'data'):
                         offset = '{0:#0{1}x}'.format(resentry.data.struct.OffsetToData, 10)
-                        data += '{:16}'.format(pefile.LANG[resentry.data.lang])
+                        try:
+                            data += '{:16}'.format(pefile.LANG[resentry.data.lang])
+                        except KeyError:
+                            data += '{:16}'.format('Unknown (%s)' % resentry.data.lang)
+
                         data += '{:20}'.format(pefile.get_sublang_name_for_lang(resentry.data.lang,
                                                                                 resentry.data.sublang).replace('SUBLANG_', ''))
                         data += '{:12}'.format(offset)
@@ -593,6 +585,8 @@ def print_analysis(target):
 
 def print_sections(target):
 
+    # Get overlay start
+    overlay = target.detect_overlay()
     if not target.verbose:
 
         sdata = "\n ---- Section Overview (use -v for detailed section info)  ----  \n\n"
@@ -614,26 +608,17 @@ def print_sections(target):
             sdata += "{:<20}".format(hashlib.md5(section.get_data()).hexdigest())
             sdata += "\n"
 
-        overlay = target.detect_overlay()
+        # Check for overlay
         if overlay > 0:
             overlay_size = target.filesize - overlay
-            #overlay_size = 0
-            #with open(target.filename,'rb') as rf:
-            #    raw_file = rf.read()
-
-            #overlay_size = len(raw_file[overlay:])
-            #print overlay_size
-
             sdata += " {:12}".format('.overlay')
-            sdata += "{:12}".format("{0:#0{1}x}".format(overlay_size,10))
+            sdata += "{:12}".format("{0:#0{1}x}".format(overlay_size, 10))
             sdata += "{:18}".format(hex(overlay))
             sdata += "{:20}".format('0x00000000')
             sdata += "{:20}".format('0x00000000')
             sdata += "{:<20}".format('0')
             sdata += "{:<20}".format('N/A')
             sdata += "\n"
-
-
 
     else:
         cflags = pefile.retrieve_flags(pefile.SECTION_CHARACTERISTICS, 'IMAGE_SCN_')
@@ -656,6 +641,12 @@ def print_sections(target):
             sdata += "  {:24} {:<10}\n".format("|-Number Of Relocations:", section.NumberOfRelocations)
             sdata += "  {:24} {:<10}\n".format("|-Line Numbers:", section.NumberOfLinenumbers)
             sdata += '\n'
+
+        if overlay > 0:
+            sdata += " {:10}\n".format(".overlay")
+            sdata += "  {:24} {:>10} ({:})\n".format("|-Raw Data Size:", "{0:#0{1}x}".format(target.filesize - overlay, 10),
+                                                     target.filesize - overlay)
+            sdata += "  {:24} {:>10}\n".format("|-Raw Data Pointer:", "{0:#0{1}x}".format(overlay, 10))
 
     print sdata
 
@@ -728,10 +719,9 @@ def banner():
          |    |    |     \     |    |   |  | \/  |/ __ \_/ /_/  >  ___/ 
          |____|    \___  /     |____|   |__|  |__(____  /\___  / \___  >
                        \/                             \//_____/      \/ 
-                                                                        %s
+                                                                        \033[92m %s \033[0m
     """ % __version__
     print banner
-
 
 def main():
     parser = argparse.ArgumentParser(prog='pftriage', usage='%(prog)s [options]',
