@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 
 import hashlib 
 import os
@@ -262,6 +262,22 @@ class PFTriage(object):
             # Todo Update error handling to better support being called from code.
             print 'Error processing imports - %s ' % e
         return modules
+
+
+    def get_exports(self):
+        """
+        Get exports as an array of tuples (ordinal, name)
+        :return:
+        """
+
+        exports = []
+        try:
+            for exp in self.pe.DIRECTORY_ENTRY_EXPORT.symbols:
+                exports.append((exp.address, exp.ordinal, exp.name))
+        except Exception as e:
+            # Todo Update error handling to better support being called from code.
+            print ' [!] Error processing exports - %s ' % e
+        return exports
     
     def getfuzzyhash(self):
         try:
@@ -402,7 +418,7 @@ class PFTriage(object):
         metadata['Packed'] = peutils.is_probably_packed(self.pe)
         metadata['Image Base'] = hex(self.pe.OPTIONAL_HEADER.ImageBase)
         metadata['Sections'] = self.pe.FILE_HEADER.NumberOfSections
-        metadata['Entry Point'] = hex(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint)
+        metadata['Entry Point'] = "{0:#0{1}x}".format(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 10)
         metadata['Subsystem'] = pefile.subsystem_types[self.pe.OPTIONAL_HEADER.Subsystem][0]
 
         linker = '{}.{}'.format(self.pe.OPTIONAL_HEADER.MajorLinkerVersion, self.pe.OPTIONAL_HEADER.MinorLinkerVersion)
@@ -496,6 +512,17 @@ def print_imports(modules):
     print '\n\n'
 
 
+def print_exports(exports):
+    print '\n ---- Exports ----'
+    print ' Total Exports: %d' % len(exports)
+    print ' {:12}{:10}{:32}'.format("Address", "Ordinal", "Name")
+
+    if len(exports) > 0:
+        for export in exports:
+            print ' {:12}{:<10}{:32}'.format("{0:#0{1}x}".format(export[0], 10), export[1], export[2])
+        print ''
+
+
 def print_resources(target, dumprva):
     try:
         dumpaddress = dumprva[0]
@@ -583,7 +610,12 @@ def print_analysis(target):
     print
 
 
-def print_sections(target):
+def print_sections(target, dumprva=None):
+
+    try:
+        dump_address = dumprva[0]
+    except:
+        dump_address = 0
 
     # Get overlay start
     overlay = target.detect_overlay()
@@ -606,6 +638,10 @@ def print_sections(target):
             sdata += "{:20}".format("{0:#0{1}x}".format(section.Misc_VirtualSize, 10))
             sdata += "{:<20}".format(section.get_entropy())
             sdata += "{:<20}".format(hashlib.md5(section.get_data()).hexdigest())
+            if dump_address == 'ALL' or dump_address == '{0:#0{1}x}'.format(section.VirtualAddress, 10):
+                sdata += "  [Exported]"
+                with open('exported-%s-%s' %(section.Name.strip('\0'), '{0:#0{1}x}'.format(section.VirtualAddress, 10)), 'wb') as out:
+                    out.write(section.get_data())
             sdata += "\n"
 
         # Check for overlay
@@ -640,6 +676,11 @@ def print_sections(target):
                     sdata += "  {:24}{:>5}{:<24}\n".format('|', '|-', str(flag[0]))
             sdata += "  {:24} {:<10}\n".format("|-Number Of Relocations:", section.NumberOfRelocations)
             sdata += "  {:24} {:<10}\n".format("|-Line Numbers:", section.NumberOfLinenumbers)
+
+            if dump_address == 'ALL' or dump_address == '{0:#0{1}x}'.format(section.VirtualAddress, 10):
+                sdata += "  |-[Exported]\n"
+                with open('exported-%s-%s' %(section.Name.strip('\0'), '{0:#0{1}x}'.format(section.VirtualAddress, 10)), 'wb') as out:
+                    out.write(section.get_data())
             sdata += '\n'
 
         if overlay > 0:
@@ -737,6 +778,7 @@ def main():
     parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
     parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset',
                         help="Dump data using the passed offset or 'ALL'. Currently only works with resources.")
+    parser.add_argument('-e', '--exports', dest='exports', action='store_true', help="Display exports")
     parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False, help="Display version.")
     parser.add_argument('-V', '--version', dest='version', action='store_true', help="Print version and exit.")
@@ -756,6 +798,8 @@ def main():
     print '[*] Loading File...'
     targetfile = PFTriage(args.file, verbose=args.verbose)
 
+
+
     if args.analyze:
         print_analysis(targetfile)
         return
@@ -764,8 +808,12 @@ def main():
         print_imports(targetfile.listimports())
         return
 
+    if args.exports:
+        print_exports(targetfile.get_exports())
+        return
+
     if args.sections:
-        print_sections(targetfile)
+        print_sections(targetfile, args.dump_offset)
         return
 
     if args.resources:

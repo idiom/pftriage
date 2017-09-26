@@ -1,6 +1,13 @@
 # Changelog
 
 
+
+## 0.2.2 
+
+ - Added option to display exports
+ - Added option to export sections data
+ - Minor updates
+
 ## 0.2.1
 
  - Fixed issue when resources include an invalid LangID 

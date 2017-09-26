@@ -43,7 +43,9 @@ optional arguments:
 
 ## Sections
 Display Section information by using the -s or --sections switch. Additionally you can pass (-v) for a more verbose 
-view of section details.
+view of section details. 
+
+To export a section pass --dump and the desired section Virtual Address. (ex: --dump 0x00001000)
 
 ```
  ---- Section Overview (use -v for detailed section info)  ----
@@ -108,6 +110,25 @@ and include the Ordinal used.
   |-- ...
   
 ```
+
+## Exports
+
+Display exports using -e or --exports. 
+
+```
+[*] Loading File...
+
+ ---- Exports ----
+ Total Exports: 5
+ Address     Ordinal   Name
+ 0x00001151  1         FindResources
+ 0x00001103  2         LoadBITMAP
+ 0x00001137  3         LoadICON
+ 0x000010e9  4         LoadIMAGE
+ 0x0000111d  5         LoadSTRINGW
+
+```
+
 
 ## Metadata
 File and version metadata is displayed if no options are passed on the commandline. 
