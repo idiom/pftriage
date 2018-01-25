@@ -520,9 +520,9 @@ def print_imports(modules):
             #return
             if symbol.import_by_ordinal is True:
                 if symbol.name is not None:
-                    print '  |-- %s Ordinal[%s] (Imported by Ordinal)' % (symbol.address, symbol.name, str(symbol.ordinal))
+                    print '  |-- %s Ordinal[%s] (Imported by Ordinal)' % (symbol.name, str(symbol.ordinal))
                 else:
-                    print '  |-- Ordinal[%s] (Imported by Ordinal)' % (symbol.address, str(symbol.ordinal))
+                    print '  |-- Ordinal[%s] (Imported by Ordinal)' % (str(symbol.ordinal))
             else:
                 print '  |-- %s' % symbol.name
 
