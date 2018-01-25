@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 0.2.3 
+
+ - Add PDB path to metadata
+ - Code Cleanup
 
 ## 0.2.2 
 

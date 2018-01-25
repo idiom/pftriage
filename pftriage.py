@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 
 import hashlib 
 import os
@@ -263,6 +263,13 @@ class PFTriage(object):
             print 'Error processing imports - %s ' % e
         return modules
 
+    def get_pdb_path(self):
+        path = None
+        try:
+            path = self.pe.DIRECTORY_ENTRY_DEBUG[0].entry.PdbFileName
+        except:
+            pass
+        return path
 
     def get_exports(self):
         """
@@ -282,7 +289,7 @@ class PFTriage(object):
     def getfuzzyhash(self):
         try:
             import ssdeep
-        except Exception as e:
+        except ImportError:
             return 'Error - Please ensure you install the ssdeep library.'
         
         f = open(self.filename, 'rb')
@@ -300,19 +307,24 @@ class PFTriage(object):
         
     def getbytestring(self, start, length, mmap=False):
 
-        dat = ''
+        byte_data = ''
         if mmap:
             mmdat = self.pe.get_memory_mapped_image()
-            dat = mmdat[start:start+length]
+            byte_data = mmdat[start:start+length]
         else:
-            dat = self.pe.__data__[start:start+length]
+            byte_data = self.pe.__data__[start:start+length]
         
-        bstr = ''
-        for c in dat:
-            bstr += '%s ' % c.encode('hex')
-        return bstr
+        byte_string = ''
+        for c in byte_data:
+            byte_string += '%s ' % c.encode('hex')
+        return byte_string
 
     def scan_signatures(self, sigfile):
+        """
+        Scan the PE file using a PEiD Signature file.
+        :param sigfile: The path to the PEiD signature file
+        :return:
+        """
         sigs = peutils.SignatureDatabase(sigfile)
         matches = sigs.match_all(self.pe, ep_only=True)
         return matches
@@ -428,6 +440,8 @@ class PFTriage(object):
         except KeyError:
             metadata['Linker Version'] = '{}'.format(linker)
 
+
+
         metadata['EP Bytes'] = self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True)
 
         return metadata
@@ -459,7 +473,7 @@ class PFTriage(object):
             for str_key in self.metadata:
                 fobj += ' {:4}{:<16} {}\n'.format('', str_key, self.metadata[str_key])
 
-
+            fobj += ' {:4}{:<16} {}\n'.format('', "PDB Path", self.get_pdb_path())
             iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
 
             flags = []
@@ -502,19 +516,22 @@ def print_imports(modules):
     for str_entry in modules:
         print '\n %s ' % str_entry
         for symbol in modules[str_entry]:
+            #print dir(symbol)
+            #return
             if symbol.import_by_ordinal is True:
                 if symbol.name is not None:
-                    print '  |-- %s Ordinal[%s] (Imported by Ordinal)' % (symbol.name, str(symbol.ordinal))
+                    print '  |-- %s Ordinal[%s] (Imported by Ordinal)' % (symbol.address, symbol.name, str(symbol.ordinal))
                 else:
-                    print '  |-- Ordinal[%s] (Imported by Ordinal)' % (str(symbol.ordinal))
+                    print '  |-- Ordinal[%s] (Imported by Ordinal)' % (symbol.address, str(symbol.ordinal))
             else:
                 print '  |-- %s' % symbol.name
+
     print '\n\n'
 
 
 def print_exports(exports):
     print '\n ---- Exports ----'
-    print ' Total Exports: %d' % len(exports)
+    print ' Total Functions: %d\n' % len(exports)
     print ' {:12}{:10}{:32}'.format("Address", "Ordinal", "Name")
 
     if len(exports) > 0:
@@ -797,8 +814,6 @@ def main():
 
     print '[*] Loading File...'
     targetfile = PFTriage(args.file, verbose=args.verbose)
-
-
 
     if args.analyze:
         print_analysis(targetfile)
