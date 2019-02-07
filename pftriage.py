@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '0.2.3'
+__version__ = '1.0.0'
 
 import hashlib 
 import os
@@ -10,10 +10,16 @@ import time
 import pefile
 import peutils
 import argparse
+import re
 
 
 class PFTriage(object):
-        
+    """
+
+
+
+    """
+
     # https://msdn.microsoft.com/en-us/library/ms648009(v=vs.85).aspx
     resource_type = {
         1: 'RT_CURSOR',
@@ -118,7 +124,276 @@ class PFTriage(object):
         "10.0": "Visual Studio 2010",
         "11.0": "Visual Studio 2012",
         "12.0": "Visual Studio 2013",
-        "14.0": "Visual Studio 2015"
+        "14.0": "Visual Studio 2015",
+        "14.1": "1910 (Visual Studio 2017 version 15.0)",
+        "14.11": "1911 (Visual Studio 2017 version 15.3)",
+        "14.12": "1912 (Visual Studio 2017 version 15.5)",
+        "14.13": "1913 (Visual Studio 2017 version 15.6)",
+        "14.14": "1914 (Visual Studio 2017 version 15.7)",
+        "14.15": "1915 (Visual Studio 2017 version 15.8)",
+        "14.16": "1916 (Visual Studio 2017 version 15.9)"
+    }
+
+    #
+    # From: http://bytepointer.com/articles/the_microsoft_rich_header.htm
+    #
+    # The build ids don't seem like they overlap..(which means they probably will).....
+    # so for now throw evertyhing in a single dict
+    #
+    masm_build_map ={
+        7299: "6.13.7299",
+        8444: "6.14.8444",
+        8803: "6.15.8803",
+        9030: "6.15.9030(VS.NET 7.0 BETA 1)"
+    }
+
+    vb_build_map = {
+        8169: "6.0(also reported with SP1 and SP2)",
+        8495: "6.0 SP3",
+        8877: "6.0 SP4",
+        8964: "6.0 SP5",
+        9782: "6.0 SP6 (same as reported by VC++ but different id)",
+    }
+
+    vs_build_map = {
+        8168: "6.0 (RTM, SP1 or SP2)",
+        8447: "6.0 SP3",
+        8799: "6.0 SP4",
+        8966: "6.0 SP5",
+        9044: "6.0 SP5 Processor Pack",
+        9782: "6.0 SP6",
+        9030: "7.0 2000 (BETA 1)",
+        9254: "7.0 2001 (BETA 2)",
+        9466: "7.0 2002",
+        9955: "7.0 2002 SP1",
+        3077: "7.1 2003",
+        3052: "7.1 2003 Free Toolkit",
+        4035: "7.1 2003",
+        6030: "7.1 2003 SP1",
+        50327: "8.0 2005 (Beta)",
+        50727: "8.0 2005",
+        21022: "9.0 2008",
+        30729: "9.0 2008 SP1",
+        30319: "10.0 2010",
+        40219: "10.0 2010 SP1",
+        50727: "11.0 2012",
+        51025: "11.0 2012",
+        51106: "11.0 2012 update 1",
+        60315: "11.0 2012 update 2",
+        60610: "11.0 2012 update 3",
+        61030: "11.0 2012 update 4",
+        21005: "12.0 2013",
+        30501: "12.0 2013 update 2",
+        31101: "12.0 2013 update 4",
+        40629: "12.0 2013 SP5",
+        22215: "14.0 2015",
+        23026: "14.0 2015",
+        23506: "14.0 2015 SP1",
+        23824: "14.0 2015 update 2",
+        24215: "14.0 2015",
+        24218: "14.0 2015",
+        25019: "14.1 2017"
+    }
+
+    # Prod Ids based on code and research
+    #
+    # https://gist.github.com/skochinsky/07c8e95e33d9429d81a75622b5d24c8b
+    # http://bytepointer.com/articles/the_microsoft_rich_header.htm
+    # http://trendystephen.blogspot.com/2008/01/rich-header.html
+    #
+    rich_prod_ids = {
+        0: "Unknown",
+        1: "Import0",
+        2: "Linker510",
+        3: "Cvtomf510",
+        4: "Linker600",
+        5: "Cvtomf600",
+        6: "Cvtres500",
+        7: "Utc11_Basic",
+        8: "Utc11_C",
+        9: "Utc12_Basic",
+        10: "Utc12_C",
+        11: "Utc12_CPP",
+        12: "AliasObj60",
+        13: "VisualBasic60",
+        14: "Masm613",
+        15: "Masm710",
+        16: "Linker511",
+        17: "Cvtomf511",
+        18: "Masm614",
+        19: "Linker512",
+        20: "Cvtomf512",
+        21: "Utc12_C_Std",
+        22: "Utc12_CPP_Std",
+        23: "Utc12_C_Book",
+        24: "Utc12_CPP_Book",
+        25: "Implib700",
+        26: "Cvtomf700",
+        27: "Utc13_Basic",
+        28: "Utc13_C",
+        29: "Utc13_CPP",
+        30: "Linker610",
+        31: "Cvtomf610",
+        32: "Linker601",
+        33: "Cvtomf601",
+        34: "Utc12_1_Basic",
+        35: "Utc12_1_C",
+        36: "Utc12_1_CPP",
+        37: "Linker620",
+        38: "Cvtomf620",
+        39: "AliasObj70",
+        40: "Linker621",
+        41: "Cvtomf621",
+        42: "Masm615",
+        43: "Utc13_LTCG_C",
+        44: "Utc13_LTCG_CPP",
+        45: "Masm620",
+        46: "ILAsm100",
+        47: "Utc12_2_Basic",
+        48: "Utc12_2_C",
+        49: "Utc12_2_CPP",
+        50: "Utc12_2_C_Std",
+        51: "Utc12_2_CPP_Std",
+        52: "Utc12_2_C_Book",
+        53: "Utc12_2_CPP_Book",
+        54: "Implib622",
+        55: "Cvtomf622",
+        56: "Cvtres501",
+        57: "Utc13_C_Std",
+        58: "Utc13_CPP_Std",
+        59: "Cvtpgd1300",
+        60: "Linker622",
+        61: "Linker700",
+        62: "Export622",
+        63: "Export700",
+        64: "Masm700",
+        65: "Utc13_POGO_I_C",
+        66: "Utc13_POGO_I_CPP",
+        67: "Utc13_POGO_O_C",
+        68: "Utc13_POGO_O_CPP",
+        69: "Cvtres700",
+        70: "Cvtres710p",
+        71: "Linker710p",
+        72: "Cvtomf710p",
+        73: "Export710p",
+        74: "Implib710p",
+        75: "Masm710p",
+        76: "Utc1310p_C",
+        77: "Utc1310p_CPP",
+        78: "Utc1310p_C_Std",
+        79: "Utc1310p_CPP_Std",
+        80: "Utc1310p_LTCG_C",
+        81: "Utc1310p_LTCG_CPP",
+        82: "Utc1310p_POGO_I_C",
+        83: "Utc1310p_POGO_I_CPP",
+        84: "Utc1310p_POGO_O_C",
+        85: "Utc1310p_POGO_O_CPP",
+        86: "Linker624",
+        87: "Cvtomf624",
+        88: "Export624",
+        89: "Implib624",
+        90: "Linker710",
+        91: "Cvtomf710",
+        92: "Export710",
+        93: "Implib710",
+        94: "Cvtres710",
+        95: "Utc1310_C",
+        96: "Utc1310_CPP",
+        97: "Utc1310_C_Std",
+        98: "Utc1310_CPP_Std",
+        99: "Utc1310_LTCG_C",
+        100: "Utc1310_LTCG_CPP",
+        101: "Utc1310_POGO_I_C",
+        102: "Utc1310_POGO_I_CPP",
+        103: "Utc1310_POGO_O_C",
+        104: "Utc1310_POGO_O_CPP",
+        105: "AliasObj710",
+        106: "AliasObj710p",
+        107: "Cvtpgd1310",
+        108: "Cvtpgd1310p",
+        109: "Utc1400_C",
+        110: "Utc1400_CPP",
+        111: "Utc1400_C_Std",
+        112: "Utc1400_CPP_Std",
+        113: "Utc1400_LTCG_C",
+        114: "Utc1400_LTCG_CPP",
+        115: "Utc1400_POGO_I_C",
+        116: "Utc1400_POGO_I_CPP",
+        117: "Utc1400_POGO_O_C",
+        118: "Utc1400_POGO_O_CPP",
+        119: "Cvtpgd1400",
+        120: "Linker800",
+        121: "Cvtomf800",
+        122: "Export800",
+        123: "Implib800",
+        124: "Cvtres800",
+        125: "Masm800",
+        126: "AliasObj800",
+        127: "PhoenixPrerelease",
+        128: "Utc1400_CVTCIL_C",
+        129: "Utc1400_CVTCIL_CPP",
+        130: "Utc1400_LTCG_MSIL",
+        131: "Utc1500_C",
+        132: "Utc1500_CPP",
+        133: "Utc1500_C_Std",
+        134: "Utc1500_CPP_Std",
+        135: "Utc1500_CVTCIL_C",
+        136: "Utc1500_CVTCIL_CPP",
+        137: "Utc1500_LTCG_C",
+        138: "Utc1500_LTCG_CPP",
+        139: "Utc1500_LTCG_MSIL",
+        140: "Utc1500_POGO_I_C",
+        141: "Utc1500_POGO_I_CPP",
+        142: "Utc1500_POGO_O_C",
+        143: "Utc1500_POGO_O_CPP",
+        144: "Cvtpgd1500",
+        145: "Linker900",
+        146: "Export900",
+        147: "Implib900",
+        148: "Cvtres900",
+        149: "Masm900",
+        150: "AliasObj900",
+        151: "Resource900",
+        152: "AliasObj1000",
+        154: "Cvtres1000",
+        155: "Export1000",
+        156: "Implib1000",
+        157: "Linker1000",
+        158: "Masm1000",
+        170: "Utc1600_C",
+        171: "Utc1600_CPP",
+        172: "Utc1600_CVTCIL_C",
+        173: "Utc1600_CVTCIL_CPP",
+        174: "Utc1600_LTCG_C ",
+        175: "Utc1600_LTCG_CPP",
+        176: "Utc1600_LTCG_MSIL",
+        177: "Utc1600_POGO_I_C",
+        178: "Utc1600_POGO_I_CPP",
+        179: "Utc1600_POGO_O_C",
+        180: "Utc1600_POGO_O_CPP",
+        183: "Linker1010",
+        184: "Export1010",
+        185: "Implib1010",
+        186: "Cvtres1010",
+        187: "Masm1010",
+        188: "AliasObj1010",
+        199: "AliasObj1100",
+        201: "Cvtres1100",
+        202: "Export1100",
+        203: "Implib1100",
+        204: "Linker1100",
+        205: "Masm1100",
+        206: "Utc1700_C",
+        207: "Utc1700_CPP",
+        208: "Utc1700_CVTCIL_C",
+        209: "Utc1700_CVTCIL_CPP",
+        210: "Utc1700_LTCG_C ",
+        211: "Utc1700_LTCG_CPP",
+        212: "Utc1700_LTCG_MSIL",
+        213: "Utc1700_POGO_I_C",
+        214: "Utc1700_POGO_I_CPP",
+        215: "Utc1700_POGO_O_C",
+        216: "Utc1700_POGO_O_CPP",
     }
 
     def __init__(self, tfile, verbose=False, loglevel='Error'):
@@ -416,6 +691,53 @@ class PFTriage(object):
                 results.append(AnalysisResult(1, 'Sections', 'Raw Section Size is 0 [%s]' % section.Name.strip('\0')))
 
         return results
+
+    def _lookup_build_id(self, prodid, buildid):
+        """
+        Simple lookup based on the prodid
+
+        :param prodid:
+        :param buildid:
+        :return:
+        """
+
+        try:
+            prod = self.rich_prod_ids[prodid]
+        except KeyError:
+            return "<Unknown>"
+
+        try:
+            if "masm" in prod.lower():
+                return self.masm_build_map[buildid]
+            elif "basic" in prod.lower():
+                return self.vb_build_map[buildid]
+        except KeyError:
+            pass
+
+        try:
+            return self.vs_build_map[buildid]
+        except KeyError:
+            return "<Unknown>"
+
+    # ref: https://gist.github.com/skochinsky/07c8e95e33d9429d81a75622b5d24c8b
+    def parse_rich_header(self):
+
+        rh = self.pe.parse_rich_header()
+
+        if not rh:
+            print " [!] No Rich Header found.."
+            return
+        rvals = rh['values']
+        entries = []
+        for val in xrange(0,len(rvals), 2):
+            header = {}
+            header["ProdId"], header["BuildId"] = (rvals[val] >> 16), rvals[val] & 0xFFFF
+            header["Product"] = self.rich_prod_ids[header["ProdId"]]
+            header["Build"] = self._lookup_build_id(header["ProdId"], header["BuildId"])
+            header["Count"] = rvals[val+1]
+            entries.append(header)
+        parsed_header = {"Checksum": hex(rh['checksum']), "Entries": entries}
+        return parsed_header
 
     def _populate_metadata(self):
         metadata = {}
@@ -767,6 +1089,22 @@ def extract_overlay(targetfile):
         out.write(data)
     return
 
+def print_rich_headers(headers):
+    print "-- Rich Header Details --\n"
+    print " Checksum: %s" % headers["Checksum"]
+
+    result = " {:<4}{:<16}{:<8}{:<10}{:<32}\n".format("Id","Product", "Count", "Build Id","Build")
+    result += " {:<4}{:<16}{:<8}{:<10}{:<32}\n".format("-"*2, "-"*7, "-"*5, "-"*8, "-"*5)
+
+    for entry in headers["Entries"]:
+        result += " {:<4}{:<16}{:<8}{:<10}{:<32}\n".format(entry["ProdId"],
+                                                     entry["Product"],
+                                                     entry["Count"],
+                                                     entry["BuildId"],
+                                                     entry["Build"])
+
+    print result
+
 
 def banner():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -793,6 +1131,7 @@ def main():
     parser.add_argument('--extractoverlay', dest='eol', action='store_true', default=False,
                         help="Extract overlay data.")
     parser.add_argument('-r', '--resources', dest='resources', action='store_true', help="Display resource information")
+    parser.add_argument('-R', '--rich', dest='rich', action='store_true', help="Display Rich Header information")
     parser.add_argument('-D', '--dump', nargs=1, dest='dump_offset',
                         help="Dump data using the passed offset or 'ALL'. Currently only works with resources.")
     parser.add_argument('-e', '--exports', dest='exports', action='store_true', help="Display exports")
@@ -815,6 +1154,8 @@ def main():
     print '[*] Loading File...'
     targetfile = PFTriage(args.file, verbose=args.verbose)
 
+
+
     if args.analyze:
         print_analysis(targetfile)
         return
@@ -834,6 +1175,15 @@ def main():
     if args.resources:
         print_resources(targetfile, args.dump_offset)
         return
+
+    if args.rich:
+        headers = targetfile.parse_rich_header()
+        if not headers:
+            print " [!] Rich Header not found or corrupt"
+            return
+        print_rich_headers(headers)
+        return
+
 
     # Remove Overlay
     if args.rol:

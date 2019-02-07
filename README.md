@@ -32,10 +32,12 @@ optional arguments:
                         pass the -v switch
   --removeoverlay       Remove overlay data.
   --extractoverlay      Extract overlay data.
-  -r, --resources       Display resource informations
+  -r, --resources       Display resource information
+  -R, --rich            Display Rich Header information
   -D DUMP_OFFSET, --dump DUMP_OFFSET
                         Dump data using the passed offset or 'ALL'. Currently
                         only works with resources.
+  -e, --exports         Display exports
   -a, --analyze         Analyze the file.
   -v, --verbose         Display version.
   -V, --version         Print version and exit.
@@ -113,7 +115,7 @@ and include the Ordinal used.
 
 ## Exports
 
-Display exports using -e or --exports. 
+Display exports using `-e` or `--exports`.
 
 ```
 [*] Loading File...
@@ -127,6 +129,25 @@ Display exports using -e or --exports.
  0x000010e9  4         LoadIMAGE
  0x0000111d  5         LoadSTRINGW
 
+```
+
+
+## Rich Headers
+Display Rich headers using the `-R` or `--rich` flags.
+```
+[*] Loading File...
+-- Rich Header Details --
+
+ Checksum: 0x2b41e6a9
+ Id  Product         Count   Build Id  Build
+ --  -------         -----   --------  -----
+ 150 AliasObj900     1       20413     <Unknown>
+ 132 Utc1500_CPP     36      21022     9.0 2008
+ 149 Masm900         17      21022     9.0 2008
+ 123 Implib800       3       50727     11.0 2012
+ 1   Import0         102     0         <Unknown>
+ 131 Utc1500_C       123     21022     9.0 2008
+ 145 Linker900       1       21022     9.0 2008
 ```
 
 
@@ -177,7 +198,7 @@ File and version metadata is displayed if no options are passed on the commandli
 
 
 ## Analyze 
-PFTriage can performa a simple analysis of a file to identify malicious characteristics. 
+PFTriage can perform simple analysis of a file to help identify malicious characteristics.
 
 ```
 [*] Loading File...

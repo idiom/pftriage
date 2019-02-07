@@ -1,7 +1,13 @@
 # Changelog
 
 
-## 0.2.3 
+## 1.0.0
+ - Add option (-R) --rich to parse and display Rich headers
+ - Updated Linker Map
+ - Updated Readme
+ - Bump version
+
+## 0.2.3
 
  - Add PDB path to metadata
  - Code Cleanup
