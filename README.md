@@ -44,10 +44,10 @@ optional arguments:
  ```
 
 ## Sections
-Display Section information by using the -s or --sections switch. Additionally you can pass (-v) for a more verbose 
+Display Section information by using the `-s` or `--sections` switch. Additionally you can pass (`-v`) for a more verbose
 view of section details. 
 
-To export a section pass --dump and the desired section Virtual Address. (ex: --dump 0x00001000)
+To export a section pass `--dump` and the desired section Virtual Address. (ex: `--dump 0x00001000`)
 
 ```
  ---- Section Overview (use -v for detailed section info)  ----
@@ -61,7 +61,7 @@ To export a section pass --dump and the desired section Virtual Address. (ex: --
 ```
 
 ## Resources
-Display resource data by using -r or --resources.
+Display resource data by using `-r` or `--resources`.
 
 
 ```
@@ -78,11 +78,11 @@ Display resource data by using -r or --resources.
 
 ```
 
-To extract a specific resource use -D with the desired offset. If you want to extract all resources pass ALL istead 
+To extract a specific resource use `-D` with the desired offset. If you want to extract all resources pass ALL istead
  of a specific offset.  
 
 ## Imports
-Display Import data and modules using -i or --imports. Imports which are identified as ordinals will be identified
+Display Import data and modules using `-i` or `--imports`. Imports which are identified as ordinals will be identified
 and include the Ordinal used. 
 
 ```
@@ -217,7 +217,7 @@ PFTriage can perform simple analysis of a file to help identify malicious charac
 
 ## Overlay Data
 Overlay data is identified by analyzing or displaying section information of the file. If overlay data exists PFTriage
-can either remove the data by using the (--removeoverlay) switch or export the overlay data by using the (--extractoverlay)
+can either remove the data by using the (`--removeoverlay`) switch or export the overlay data by using the (--extractoverlay)
 switch.  
 
 
