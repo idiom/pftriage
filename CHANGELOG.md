@@ -1,6 +1,9 @@
 # Changelog
 
 
+## 1.0.1
+ - Minor updates
+
 ## 1.0.0
  - Add option (-R) --rich to parse and display Rich headers
  - Updated Linker Map

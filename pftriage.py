@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'Display info about a file.'
 __author__ = 'Sean Wilson'
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 import hashlib 
 import os
@@ -725,16 +725,24 @@ class PFTriage(object):
         rh = self.pe.parse_rich_header()
 
         if not rh:
-            print " [!] No Rich Header found.."
-            return
+            return None
+
         rvals = rh['values']
         entries = []
         for val in xrange(0,len(rvals), 2):
-            header = {}
-            header["ProdId"], header["BuildId"] = (rvals[val] >> 16), rvals[val] & 0xFFFF
-            header["Product"] = self.rich_prod_ids[header["ProdId"]]
-            header["Build"] = self._lookup_build_id(header["ProdId"], header["BuildId"])
-            header["Count"] = rvals[val+1]
+            header = {"Product": "<Unknown>",
+                      "Build": "<Unknown>",
+                      "ProdId": (rvals[val] >> 16),
+                      "BuildId": rvals[val] & 0xFFFF
+                      }
+            try:
+                header["Product"] = self.rich_prod_ids[header["ProdId"]]
+                header["Build"] = self._lookup_build_id(header["ProdId"], header["BuildId"])
+            except KeyError:
+                pass
+
+            header["Count"] = rvals[val + 1]
+
             entries.append(header)
         parsed_header = {"Checksum": hex(rh['checksum']), "Entries": entries}
         return parsed_header
