@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 1.0.2
+ - Bug fixes
+ - Code clean up
+ - Minor updates
+ - Added `--nobanner` option
+ - Fix issues with details
+ - Update to use `file-magic` package for libmagic
+
 ## 1.0.1
  - Minor updates
 

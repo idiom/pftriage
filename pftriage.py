@@ -1,25 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-__description__ = 'Display info about a file.'
+__description__ = 'pftriage is a tool to help analyze files during malware triage.'
 __author__ = 'Sean Wilson'
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
-import hashlib 
+import hashlib
 import os
 import time
 import pefile
 import peutils
 import argparse
-import re
+
+try:
+    import magic
+except ImportError:
+    print("[!] Warning file-magic required.")
 
 
 class PFTriage(object):
     """
 
 
-
     """
-
     # https://msdn.microsoft.com/en-us/library/ms648009(v=vs.85).aspx
     resource_type = {
         1: 'RT_CURSOR',
@@ -47,7 +49,7 @@ class PFTriage(object):
         23: 'RT_HTML',
         24: 'RT_MANIFEST',
     }
-    
+
     # https://msdn.microsoft.com/en-us/library/aa381057.aspx
     charsetID = {
         0: "7-bit ASCII",
@@ -63,30 +65,30 @@ class PFTriage(object):
         1255: "Hebrew",
         1256: "Arabic"
     }
-    
+
     # https://msdn.microsoft.com/en-us/library/aa381057.aspx
     langID = {
         0x0000: "Unknown",
         0x0401: "Arabic",
-        0x0402: "Bulgarian",    
+        0x0402: "Bulgarian",
         0x0403: "Catalan",
         0x0404: "Traditional Chinese",
         0x0405: "Czech",
-        0x0406: "Danish",   
-        0x0407: "German",   
-        0x0408: "Greek",    
-        0x0409: "U.S. English", 
-        0x040A: "Castilian Spanish",    
+        0x0406: "Danish",
+        0x0407: "German",
+        0x0408: "Greek",
+        0x0409: "U.S. English",
+        0x040A: "Castilian Spanish",
         0x040B: "Finnish",
-        0x040C: "French",   
-        0x040D: "Hebrew",   
-        0x040E: "Hungarian",    
-        0x040F: "Icelandic",    
-        0x0410: "Italian",  
-        0x0411: "Japanese", 
-        0x0412: "Korean",   
-        0x0413: "Dutch",    
-        0x0414: "Norwegian - Bokmal",   
+        0x040C: "French",
+        0x040D: "Hebrew",
+        0x040E: "Hungarian",
+        0x040F: "Icelandic",
+        0x0410: "Italian",
+        0x0411: "Japanese",
+        0x0412: "Korean",
+        0x0413: "Dutch",
+        0x0414: "Norwegian - Bokmal",
         0x0415: "Polish",
         0x0416: "Portuguese (Brazil)",
         0x0417: "Rhaeto-Romanic",
@@ -107,8 +109,8 @@ class PFTriage(object):
         0x080C: "Belgian French",
         0x0C0C: "Canadian French",
         0x100C: "Swiss French",
-        0x0810: "Swiss Italian",    
-        0x0813: "Belgian Dutch",    
+        0x0810: "Swiss Italian",
+        0x0813: "Belgian Dutch",
         0x0814: "Norwegian - Nynorsk",
         0x0816: "Portuguese (Portugal)",
         0x081A: "Serbo-Croatian (Cyrillic)"
@@ -138,7 +140,7 @@ class PFTriage(object):
     # From: http://bytepointer.com/articles/the_microsoft_rich_header.htm
     #
     # The build ids don't seem like they overlap..(which means they probably will).....
-    # so for now throw evertyhing in a single dict
+    # so for now throw everthing in a single dict
     #
     masm_build_map ={
         7299: "6.13.7299",
@@ -397,10 +399,10 @@ class PFTriage(object):
     }
 
     def __init__(self, tfile, verbose=False, loglevel='Error'):
-        
+
         if not os.path.isfile(tfile):
             raise Exception('Error! File does not exist...')
-            
+
         self.filename = tfile
         self.pe       = None
         self.filesize = os.path.getsize(self.filename)
@@ -424,27 +426,27 @@ class PFTriage(object):
 
     def magic_type(self, data, isdata=False):
         try:
-            with magic.Magic() as m:
-                if isdata:
-                    magictype = m.id_buffer(data)
-                else:
-                    magictype = m.id_filename(data)
+
+            if isdata:
+                magictype = magic.detect_from_content(data[0:512]).name
+            else:
+                magictype = magic.detect_from_filename(data).name
         except NameError:
-            magictype = 'Error - filemagic library required.'
+            magictype = 'Error - file-magic library required.'
         except Exception as e:
             magictype = 'Error getting magic type - %s' % e
         return magictype
-            
+
     def gethash(self, htype):
         if htype == 'md5':
-            m = hashlib.md5() 
+            m = hashlib.md5()
         elif htype == 'sha1':
-            m = hashlib.sha1() 
+            m = hashlib.sha1()
         elif htype == 'sha256':
-            m = hashlib.sha256() 
+            m = hashlib.sha256()
         m.update(self.pe.__data__)
-        return m.hexdigest()    
-    
+        return m.hexdigest()
+
     def getimphash(self):
         ihash = ''
         try:
@@ -512,7 +514,7 @@ class PFTriage(object):
                                 varfileinfo['charsetID'] = str(int(tparms[1], 16))
                             except Exception as e:
                                 # Todo Update error handling to better support being called from code.
-                                print e
+                                print(e)
 
                 elif t.name == 'StringFileInfo':
                     for vdata in t.StringTable:
@@ -523,20 +525,22 @@ class PFTriage(object):
         except AttributeError as ae:
             versioninfo['Error'] = ae
 
-        versioninfo["VarInfo"] = varfileinfo 
+        versioninfo["VarInfo"] = varfileinfo
         versioninfo["StringInfo"] = stringfileinfo
-        
-        return versioninfo 
-        
+
+        return versioninfo
+
     def listimports(self):
         modules = {}
         try:
             for module in self.pe.DIRECTORY_ENTRY_IMPORT:
                 modules[module.dll] = module.imports
         except Exception as e:
-            # Todo Update error handling to better support being called from code.
-            print 'Error processing imports - %s ' % e
-        return modules
+            # Todo: Update error handling to better support being called from code.
+            # Todo: Migrate this to logger
+            print('Error processing imports - %s ' % e)
+        finally:
+            return modules
 
     def get_pdb_path(self):
         path = None
@@ -558,28 +562,28 @@ class PFTriage(object):
                 exports.append((exp.address, exp.ordinal, exp.name))
         except Exception as e:
             # Todo Update error handling to better support being called from code.
-            print ' [!] Error processing exports - %s ' % e
+            print(' [!] Error processing exports - %s ' % e)
         return exports
-    
+
     def getfuzzyhash(self):
         try:
             import ssdeep
         except ImportError:
             return 'Error - Please ensure you install the ssdeep library.'
-        
+
         f = open(self.filename, 'rb')
         fdat = f.read()
         f.close()
         return ssdeep.hash(fdat)
-    
+
     def extractdata(self, offset, size):
         try:
             data = self.pe.get_memory_mapped_image()[offset:offset+size]
         except Exception as e:
-            print e
+            print(e)
             data = None
         return data
-        
+
     def getbytestring(self, start, length, mmap=False):
 
         byte_data = ''
@@ -588,7 +592,7 @@ class PFTriage(object):
             byte_data = mmdat[start:start+length]
         else:
             byte_data = self.pe.__data__[start:start+length]
-        
+
         byte_string = ''
         for c in byte_data:
             byte_string += '%s ' % c.encode('hex')
@@ -634,15 +638,50 @@ class PFTriage(object):
                     'createservice', 'startservice']
 
         importwl = ['terminateprocess']
+
         # Standard section names.
         predef_sections = ['.text', '.bss', '.rdata', '.data', '.rsrc', '.edata', '.idata', '.pdata', '.debug',
                            '.reloc', '.sxdata', '.tls']
 
+        # Default section names for common free/commercial packers.
+        # From http://www.hexacorn.com/blog/2012/10/14/random-stats-from-1-2m-samples-pe-section-names/
+        common_packer_names = {
+            "aspack": "Aspack Packer",
+            ".adata": "Aspack Packer/Armadillo packer",
+            "ASPack": "Aspack packer",
+            ".ASPack": "ASPAck Protector",
+            ".MPRESS1": "MPRESS Packer",
+            ".MPRESS2": "MPRESS Packer",
+            "pebundle": "PEBundle Packer",
+            "PEBundle": "PEBundle Packer",
+            "PEC2TO": "PECompact Packer",
+            "PEC2": "PECompact Packer",
+            "pec1": "PECompact Packer",
+            "pec2": "PECompact Packer",
+            "PEC2MO": "PECompact Packer",
+            "PELOCKnt": "PELock Protector",
+            "PESHiELD": "PEShield Packer",
+            "Themida": "Themida Packer",
+            ".Themida": "Themida Packer",
+            "UPX0": "UPX packer",
+            "UPX1": "UPX packer",
+            "UPX2": "UPX packer",
+            "UPX!": "UPX packer",
+            ".UPX0": "UPX Packer",
+            ".UPX1": "UPX Packer",
+            ".UPX2": "UPX Packer",
+            ".vmp0": "VMProtect packer",
+            ".vmp1": "VMProtect packer",
+            ".vmp2": "VMProtect packer",
+            "VProtect": "Vprotect Packer"
+        }
+
         # Get filetype
-        # results.append(AnalysisResult(2, 'File Type', self.magic_type(self.filename)))
+        results.append(AnalysisResult(2, 'File Type', self.magic_type(self.filename)))
 
         if not self.pe.verify_checksum():
-            results.append(AnalysisResult(0, 'Checksum', "Invalid CheckSum"))
+            # self.OPTIONAL_HEADER.CheckSum == self.generate_checksum()
+            results.append(AnalysisResult(0, 'Checksum', "The checksum %x does not match %x " % (self.pe.OPTIONAL_HEADER.CheckSum, self.pe.generate_checksum())))
 
         if peutils.is_probably_packed(self.pe):
             results.append(AnalysisResult(1, 'Packed', "Sample is probably packed"))
@@ -661,17 +700,19 @@ class PFTriage(object):
                 dotnet = True
                 continue
 
-            if modulename in modbl:
+            if modulename.upper() in modbl:
                 results.append(AnalysisResult(0, 'Imports', "Suspicious Import [%s]" % modulename))
 
             if modulename.upper() in modlist:
                 for symbol in modules[modulename]:
                     if symbol.name.lower() in dbglist:
-                        results.append(AnalysisResult(0, 'AntiDebug', 'AntiDebug Function import [%s]' % symbol.name))
+                        results.append(AnalysisResult(0, 'AntiDebug', 'Anti-Debug Function import [%s]' % symbol.name))
+
                     if symbol.name.lower() in importbl:
                         results.append(AnalysisResult(0, 'Imports', 'Suspicious API Call [%s]' % symbol.name))
                     if symbol.name.lower() in importwl:
                         results.append(AnalysisResult(1, 'Imports', 'Suspicious API Call [%s]' % symbol.name))
+
                     if symbol.name.lower() in dsdcalls:
                         dsd += 1
 
@@ -684,11 +725,14 @@ class PFTriage(object):
 
         sections = self.pe.sections
         for section in sections:
-            if section.Name.strip('\0') not in predef_sections:
-                results.append(AnalysisResult(1, 'Sections', 'Uncommon Section Name [%s]' % section.Name.strip('\0')))
-
+            name = section.Name.strip('\0')
+            if name not in predef_sections:
+                if name in common_packer_names.keys():
+                    results.append(AnalysisResult(0, 'Sections', 'The section name [%s] is a common name for the %s' % (name, common_packer_names[name])))
+                else:
+                    results.append(AnalysisResult(1, 'Sections', 'Uncommon Section Name [%s]' % name))
             if section.SizeOfRawData == 0:
-                results.append(AnalysisResult(1, 'Sections', 'Raw Section Size is 0 [%s]' % section.Name.strip('\0')))
+                results.append(AnalysisResult(1, 'Sections', 'Raw Section Size is 0 [%s]' % name))
 
         return results
 
@@ -749,11 +793,6 @@ class PFTriage(object):
 
     def _populate_metadata(self):
         metadata = {}
-        metadata['Filename'] = self.filename
-        metadata['Magic Type'] = self.magic_type(self.filename)
-        metadata['Size'] = self.filesize
-        metadata['First Bytes'] = self.getbytestring(0, 16)
-
         metadata['Checksum'] = self.pe.OPTIONAL_HEADER.CheckSum
         metadata['Compile Time'] = '%s UTC' % time.asctime(time.gmtime(self.pe.FILE_HEADER.TimeDateStamp))
         metadata['Signature'] = hex(self.pe.NT_HEADERS.Signature)
@@ -799,19 +838,17 @@ class PFTriage(object):
         fobj += ' Headers\n'
 
         if self.pe is not None:
-            #hinfo = self.getheaderinfo()
             for str_key in self.metadata:
                 fobj += ' {:4}{:<16} {}\n'.format('', str_key, self.metadata[str_key])
 
             fobj += ' {:4}{:<16} {}\n'.format('', "PDB Path", self.get_pdb_path())
             iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
 
-            flags = []
             fobj += ' {:4}{:<16} \n'.format('', "Characteristics")
             for flag in iflags:
                 if getattr(self.pe.FILE_HEADER, flag[0]):
                     fobj += " {:20s} {:<20s}\n".format('', str(flag[0]))
-                                
+
         return fobj
 
 
@@ -840,51 +877,66 @@ class AnalysisResult:
 
 
 def print_imports(modules):
+    """
+    Print the imports for the passed list of modules
 
-    print " ---- Imports ----  "
-    print ' Number of imported modules: %s \n ' % len(modules)
+    :param modules:
+    :return:
+    """
+    print(' ---- Imports ----  ')
+    print(' Number of imported modules: %s \n ' % len(modules))
     for str_entry in modules:
-        print '\n %s ' % str_entry
+        print('\n %s ' % str_entry)
         for symbol in modules[str_entry]:
-            #print dir(symbol)
-            #return
             if symbol.import_by_ordinal is True:
                 if symbol.name is not None:
-                    print '  |-- %s Ordinal[%s] (Imported by Ordinal)' % (symbol.name, str(symbol.ordinal))
+                    print('  |-- %s Ordinal[%s] (Imported by Ordinal)' % (symbol.name, str(symbol.ordinal)))
                 else:
-                    print '  |-- Ordinal[%s] (Imported by Ordinal)' % (str(symbol.ordinal))
+                    print('  |-- Ordinal[%s] (Imported by Ordinal)' % (str(symbol.ordinal)))
             else:
-                print '  |-- %s' % symbol.name
+                print('  |-- %s' % symbol.name)
 
-    print '\n\n'
+    print('\n\n')
 
 
 def print_exports(exports):
-    print '\n ---- Exports ----'
-    print ' Total Functions: %d\n' % len(exports)
-    print ' {:12}{:10}{:32}'.format("Address", "Ordinal", "Name")
+    """
+
+    :param exports:
+    :return:
+    """
+    print('\n ---- Exports ----')
+    print(' Total Functions: %d\n' % len(exports))
+    print(' {:12}{:10}{:32}'.format("Address", "Ordinal", "Name"))
 
     if len(exports) > 0:
         for export in exports:
-            print ' {:12}{:<10}{:32}'.format("{0:#0{1}x}".format(export[0], 10), export[1], export[2])
-        print ''
+            print(' {:12}{:<10}{:32}'.format("{0:#0{1}x}".format(export[0], 10), export[1], export[2]))
 
 
 def print_resources(target, dumprva):
+    """
+
+    Print resources and optionally dump a resource based on the passed RVA
+
+    :param target:
+    :param dumprva:
+    :return:
+    """
     try:
         dumpaddress = dumprva[0]
     except:
         dumpaddress = 0
-    
+
     data = "\n ---- Resource Overview ----  \n\n"
 
     try:
         resdir = target.pe.DIRECTORY_ENTRY_RESOURCE
     except AttributeError:
         data += 'Resources not found...\n'
-        print data
+        print(data)
         return
-        
+
     for entry in resdir.entries:
 
         if entry.id is not None:
@@ -927,7 +979,7 @@ def print_resources(target, dumprva):
                         data += '{:12}'.format("{0:#0{1}x}".format(resentry.data.struct.CodePage, 10))
                         #data += '{:64}'.format(target.magic_type(target.extractdata(resentry.data.struct.OffsetToData,
                                                                                    #resentry.data.struct.Size)[:64], True))
-                        
+
                         if dumpaddress == 'ALL' or dumpaddress == offset:
                             data += '\n\n  Matched offset[%s] -- dumping resource' % dumpaddress
                             tmpdata = target.extractdata(resentry.data.struct.OffsetToData, resentry.data.struct.Size)
@@ -937,7 +989,7 @@ def print_resources(target, dumprva):
                             f.close()
                 data += '\n'
             data += '\n'
-    print data
+    print(data)
 
 
 def print_analysis(target):
@@ -948,16 +1000,21 @@ def print_analysis(target):
     :return:
     """
 
-    print '[*] Analyzing File...'
+    print('[*] Analyzing File...')
     results = target.analyze()
-    print '[*] Analysis Complete...'
-    print
+    print('[*] Analysis Complete...\n')
+
     for analysis_result in results:
-        print analysis_result
-    print
+        print(analysis_result)
 
 
 def print_sections(target, dumprva=None):
+    """
+
+    :param target:
+    :param dumprva:
+    :return:
+    """
 
     try:
         dump_address = dumprva[0]
@@ -967,15 +1024,14 @@ def print_sections(target, dumprva=None):
     # Get overlay start
     overlay = target.detect_overlay()
     if not target.verbose:
-
-        sdata = "\n ---- Section Overview (use -v for detailed section info)  ----  \n\n"
-        sdata += " {:12}{:12}{:18}{:20}{:20}{:20}{:20}\n".format("Name",
-                                                        "Raw Size",
-                                                        "Raw Data Pointer",
-                                                        "Virtual Address",
-                                                        "Virtual Size",
-                                                        "Entropy",
-                                                        "Hash")
+        print("\n ---- Section Overview (use -v for detailed section info)  ----  \n\n")
+        sdata = " {:12}{:12}{:18}{:20}{:20}{:20}{:20}\n".format("Name",
+                                                                 "Raw Size",
+                                                                 "Raw Data Pointer",
+                                                                 "Virtual Address",
+                                                                 "Virtual Size",
+                                                                 "Entropy",
+                                                                 "Hash")
 
         for section in target.pe.sections:
             sdata += " {:12}".format(section.Name.strip('\0'))
@@ -984,7 +1040,7 @@ def print_sections(target, dumprva=None):
             sdata += "{:20}".format("{0:#0{1}x}".format(section.VirtualAddress, 10))
             sdata += "{:20}".format("{0:#0{1}x}".format(section.Misc_VirtualSize, 10))
             sdata += "{:<20}".format(section.get_entropy())
-            sdata += "{:<20}".format(hashlib.md5(section.get_data()).hexdigest())
+            sdata += "{:<20}".format(hashlib.sha1(section.get_data()).hexdigest())
             if dump_address == 'ALL' or dump_address == '{0:#0{1}x}'.format(section.VirtualAddress, 10):
                 sdata += "  [Exported]"
                 with open('exported-%s-%s' %(section.Name.strip('\0'), '{0:#0{1}x}'.format(section.VirtualAddress, 10)), 'wb') as out:
@@ -1036,83 +1092,93 @@ def print_sections(target, dumprva=None):
                                                      target.filesize - overlay)
             sdata += "  {:24} {:>10}\n".format("|-Raw Data Pointer:", "{0:#0{1}x}".format(overlay, 10))
 
-    print sdata
+    print(sdata)
 
 
 def print_versioninfo(versioninfo):
+    """
+
+    :param versioninfo:
+    :return:
+    """
+    if not versioninfo:
+        print('\n No Version Info Detected...')
+        return
 
     # output the version info blocks.
-    print '\n---- Version Info ----  \n'
+    print('\n---- Version Info ----  \n')
     if 'StringInfo' in versioninfo:
         sinfo = versioninfo['StringInfo']
         if len(sinfo) == 0:
-            print ' No version info block...'
+            print(' No version info block...')
         else:
             for str_entry in sinfo:
-                print ' {:<16} {}'.format(str_entry, sinfo[str_entry].encode('utf-8'))
+                print(' {:<16} {}'.format(str_entry, sinfo[str_entry].encode('utf-8')))
 
     if 'VarInfo' in versioninfo:
         vinfo = versioninfo['VarInfo']
         if len(vinfo) == 0:
-            print ' No language info block...'
+            print(' No language info block...')
         else:
-            print ''
+            print('')
             for str_entry in vinfo:
                 if str_entry == 'LangID':
                     try:
-                        print ' {:<16} {} ({})'.format('LangID', PFTriage.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8'))
+                        print(' {:<16} {} ({})'.format('LangID', PFTriage.langID[int(vinfo[str_entry], 16)], vinfo[str_entry].encode('utf-8')))
                     except KeyError:
-                        print ' {:<16} {} ({})'.format('LangID', 'Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
+                        print(' {:<16} {} ({})'.format('LangID', 'Invalid Identifier!', vinfo[str_entry].encode('utf-8')))
                 elif str_entry == 'charsetID':
                     try:
-                        print ' {:<16} {} ({})'.format('charsetID', PFTriage.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8'))
+                        print(' {:<16} {} ({})'.format('charsetID', PFTriage.charsetID[int(vinfo[str_entry])], vinfo[str_entry].encode('utf-8')))
                     except KeyError:
-                        print ' {:<16} {} ({})'.format('charsetID', 'Error Invalid Identifier!', vinfo[str_entry].encode('utf-8'))
+                        print(' {:<16} {} ({})'.format('charsetID', 'Error Invalid Identifier!', vinfo[str_entry].encode('utf-8')))
                 else:
-                    print ' {:<16} {}'.format(str_entry, vinfo[str_entry].encode('utf-8'))
-    print ''
+                    print(' {:<16} {}'.format(str_entry, vinfo[str_entry].encode('utf-8')))
 
 
 def remove_overlay(targetfile):
-    print ' [*] Removing Overlay data...'
+    """
+
+    :param targetfile:
+    :return:
+    """
+    print(' [*] Removing Overlay data...')
     data = targetfile.process_overlay_data(0)
     if len(data) == 0:
-        print ' [!] No overlay data detected...skipping'
+        print(' [!] No overlay data detected...skipping')
         return
 
-    print ' [*] Writing cleaned file to %s-cleaned' % targetfile.filename
+    print(' [*] Writing cleaned file to %s-cleaned' % targetfile.filename)
     with open('%s-cleaned' % targetfile.filename,'wb') as out:
         out.write(data)
-    return
 
 def extract_overlay(targetfile):
-    print ' [*] Removing Overlay data...'
+    print(' [*] Removing Overlay data...')
     data = targetfile.process_overlay_data(1)
     if len(data) == 0:
-        print ' [!] No overlay data detected...skipping'
+        print(' [!] No overlay data')
         return
 
-    print ' [*] Writing extracted data to file to %s-overlay' % targetfile.filename
+    print(' [*] Writing extracted data to file to %s-overlay' % targetfile.filename)
     with open('%s-overlay' % targetfile.filename,'wb') as out:
         out.write(data)
-    return
+
 
 def print_rich_headers(headers):
-    print "-- Rich Header Details --\n"
-    print " Checksum: %s" % headers["Checksum"]
+    print("-- Rich Header Details --\n")
+    print(" Checksum: %s" % headers["Checksum"])
 
     result = " {:<4}{:<16}{:<8}{:<10}{:<32}\n".format("Id","Product", "Count", "Build Id","Build")
     result += " {:<4}{:<16}{:<8}{:<10}{:<32}\n".format("-"*2, "-"*7, "-"*5, "-"*8, "-"*5)
 
     for entry in headers["Entries"]:
         result += " {:<4}{:<16}{:<8}{:<10}{:<32}\n".format(entry["ProdId"],
-                                                     entry["Product"],
-                                                     entry["Count"],
-                                                     entry["BuildId"],
-                                                     entry["Build"])
+                                                           entry["Product"],
+                                                           entry["Count"],
+                                                           entry["BuildId"],
+                                                           entry["Build"])
 
-    print result
-
+    print(result)
 
 def banner():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -1125,7 +1191,8 @@ def banner():
                        \/                             \//_____/      \/ 
                                                                         \033[92m %s \033[0m
     """ % __version__
-    print banner
+    print(banner)
+
 
 def main():
     parser = argparse.ArgumentParser(prog='pftriage', usage='%(prog)s [options]',
@@ -1146,23 +1213,24 @@ def main():
     parser.add_argument('-a', '--analyze', dest='analyze', action='store_true', help="Analyze the file.")
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False, help="Display version.")
     parser.add_argument('-V', '--version', dest='version', action='store_true', help="Print version and exit.")
+    parser.add_argument('--nobanner', dest='nobanner', action='store_true', help="Don't display the banner.")
 
-    # display banner
-    banner()
 
     try:
         args = parser.parse_args()
     except:
         return -1
 
+    # display banner
+    if not args.nobanner:
+        banner()
+
     if args.version:
-        # Just exit
+        print('Version: %s' % __version__)
         return 0
 
-    print '[*] Loading File...'
+    print('[*] Loading File...')
     targetfile = PFTriage(args.file, verbose=args.verbose)
-
-
 
     if args.analyze:
         print_analysis(targetfile)
@@ -1187,11 +1255,10 @@ def main():
     if args.rich:
         headers = targetfile.parse_rich_header()
         if not headers:
-            print " [!] Rich Header not found or corrupt"
+            print(' [!] Rich Header not found or corrupt')
             return
         print_rich_headers(headers)
         return
-
 
     # Remove Overlay
     if args.rol:
@@ -1203,9 +1270,9 @@ def main():
         return
 
     # if no options are selected print the file details
-    print '[*] Processing File details...'
-    print targetfile
-    print '[*] Loading Version Info'
+    print('[*] Processing File details...')
+    print('%s' % targetfile)
+    print('[*] Loading Version Info')
     print_versioninfo(targetfile.getstringentries())
 
 if __name__ == '__main__':

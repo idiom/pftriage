@@ -8,7 +8,8 @@ analyze function which can detect common malicious indicators used by malware.
 # Dependencies
 
  * pefile
- * filemagic 
+ * file-magic (optional)
+ * ssdeep (optional)
  
 _Note: On Mac - Apple has implemented their own version of the file command. However, libmagic can be installed using homebrew_
 ```
@@ -41,6 +42,7 @@ optional arguments:
   -a, --analyze         Analyze the file.
   -v, --verbose         Display version.
   -V, --version         Print version and exit.
+  --nobanner            Don't display the banner.
  ```
 
 ## Sections
@@ -217,7 +219,7 @@ PFTriage can perform simple analysis of a file to help identify malicious charac
 
 ## Overlay Data
 Overlay data is identified by analyzing or displaying section information of the file. If overlay data exists PFTriage
-can either remove the data by using the (`--removeoverlay`) switch or export the overlay data by using the (--extractoverlay)
+can either remove the data by using the (`--removeoverlay`) switch or export the overlay data by using the (`--extractoverlay`)
 switch.  
 
 
