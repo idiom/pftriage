@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'pftriage is a tool to help analyze files during malware triage.'
 __author__ = 'Sean Wilson'
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 import hashlib
 import os
@@ -10,6 +10,7 @@ import time
 import pefile
 import peutils
 import argparse
+
 
 try:
     import magic
@@ -498,32 +499,49 @@ class PFTriage(object):
             return ""
 
     def getstringentries(self):
+        """
+        Process Version and File Info
+
+        :return:
+        """
         versioninfo = {}
         varfileinfo = {}
         stringfileinfo = {}
         try:
-            for t in self.pe.FileInfo:
-                if t.name == 'VarFileInfo':
-                    for vardata in t.Var:
-                        for key in vardata.entry:
-                            try:
-                                varfileinfo[key] = vardata.entry[key]
-                                tparms = vardata.entry[key].split(' ')
-                                varfileinfo['LangID'] = tparms[0]
-                                # TODO: Fix this...this is terrible
-                                varfileinfo['charsetID'] = str(int(tparms[1], 16))
-                            except Exception as e:
-                                # Todo Update error handling to better support being called from code.
-                                print(e)
+            if hasattr(self.pe, 'VS_VERSIONINFO') and hasattr(self.pe, 'FileInfo'):
+                for t in self.pe.FileInfo:
 
-                elif t.name == 'StringFileInfo':
-                    for vdata in t.StringTable:
-                        for key in vdata.entries:
-                            stringfileinfo[key] = vdata.entries[key]
-                else:
-                    versioninfo['unknown'] = 'unknown'
+                    # Terrible hack to work around an issue I keep seeing with ~1/2 the bins.
+                    # Something may have changed in pefile, but I need some time to look into this.
+                    # For now cast as a list and then process.
+                    if not isinstance(t, (list,)):
+                        entry = [t]
+                    else:
+                        entry = t
+
+                    for sub_e in entry:
+                        if sub_e.name == 'VarFileInfo':
+                            for vardata in sub_e.Var:
+                                for key in vardata.entry:
+                                    try:
+                                        varfileinfo[key] = vardata.entry[key]
+                                        tparms = vardata.entry[key].split(' ')
+                                        varfileinfo['LangID'] = tparms[0]
+                                        # TODO: Fix this...this is terrible
+                                        varfileinfo['charsetID'] = str(int(tparms[1], 16))
+                                    except Exception as e:
+                                        # Todo Update error handling to better support being called from code.
+                                        print(" [!] Error processing VarFileInfo :: %s" % e)
+
+                        elif sub_e.name == 'StringFileInfo':
+                            for vdata in sub_e.StringTable:
+                                for key in vdata.entries:
+                                    # for now strip any non-ascii chars
+                                    stringfileinfo[key] = vdata.entries[key].decode('utf8').encode('ascii', 'ignore')
+                        else:
+                            versioninfo['unknown'] = 'unknown'
         except AttributeError as ae:
-            versioninfo['Error'] = ae
+            print(' [!] Error parsing Version Info :: %s' % ae)
 
         versioninfo["VarInfo"] = varfileinfo
         versioninfo["StringInfo"] = stringfileinfo

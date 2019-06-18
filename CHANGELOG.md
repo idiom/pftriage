@@ -1,6 +1,8 @@
 # Changelog
 
-
+## 1.0.3 
+ - Fix issues with Version/FileInfo
+   
 ## 1.0.2
  - Bug fixes
  - Code clean up
