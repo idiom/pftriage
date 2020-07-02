@@ -1,4 +1,4 @@
-# pftriage  [![Build Status](https://travis-ci.org/idiom/pftriage.svg?branch=master)](https://travis-ci.org/idiom/pftriage)
+# pftriage  [![Build Status](https://travis-ci.org/idiom/pftriage.svg?branch=py3)](https://travis-ci.org/idiom/pftriage)
 
 
 pftriage is a tool to help analyze files during malware triage. It allows an analyst to quickly 
