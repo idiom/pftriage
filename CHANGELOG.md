@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4
+ - Support python3
+ - Minor updates
+
 ## 1.0.3 
  - Fix issues with Version/FileInfo
    

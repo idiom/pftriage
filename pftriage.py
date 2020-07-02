@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __description__ = 'pftriage is a tool to help analyze files during malware triage.'
 __author__ = 'Sean Wilson'
-__version__ = '1.0.3'
+__version__ = '1.0.4'
 
 import hashlib
 import os
@@ -10,7 +10,6 @@ import time
 import pefile
 import peutils
 import argparse
-
 
 try:
     import magic
@@ -405,17 +404,14 @@ class PFTriage(object):
             raise Exception('Error! File does not exist...')
 
         self.filename = tfile
-        self.pe       = None
+        self.pe = None
         self.filesize = os.path.getsize(self.filename)
-        self.verbose  = verbose
+        self.verbose = verbose
         self.loglevel = loglevel
-        self.pe       = pefile.PE(self.filename)
+        self.pe = pefile.PE(self.filename)
 
         self.metadata = self._populate_metadata()
         self.hashes = self._calcHashes()
-
-    def _getpath(self):
-        return os.path.abspath(os.path.dirname(__file__))
 
     def get_image_flags(self, imageflags='IMAGE_FILE_'):
         iflags = pefile.retrieve_flags(pefile.IMAGE_CHARACTERISTICS, imageflags)
@@ -427,7 +423,6 @@ class PFTriage(object):
 
     def magic_type(self, data, isdata=False):
         try:
-
             if isdata:
                 magictype = magic.detect_from_content(data[0:512]).name
             else:
@@ -453,8 +448,6 @@ class PFTriage(object):
         try:
             if self.pe is not None:
                 ihash = self.pe.get_imphash()
-            else:
-                ihash = 'Skipped...'
         except AttributeError as ae:
             ihash = 'No imphash support, upgrade pefile to a version >= 1.2.10-139'
         finally:
@@ -553,12 +546,10 @@ class PFTriage(object):
         try:
             for module in self.pe.DIRECTORY_ENTRY_IMPORT:
                 modules[module.dll] = module.imports
-        except Exception as e:
-            # Todo: Update error handling to better support being called from code.
-            # Todo: Migrate this to logger
-            print('Error processing imports - %s ' % e)
-        finally:
-            return modules
+        except AttributeError:
+            pass
+
+        return modules
 
     def get_pdb_path(self):
         path = None
@@ -602,19 +593,19 @@ class PFTriage(object):
             data = None
         return data
 
-    def getbytestring(self, start, length, mmap=False):
+    def get_byte_string(self, start, length, mmap=False):
 
-        byte_data = ''
         if mmap:
             mmdat = self.pe.get_memory_mapped_image()
-            byte_data = mmdat[start:start+length]
+            try:
+                return mmdat[start:start+length].hex()
+            except AttributeError:
+                return ''.join(x.encode('hex') for x in mmdat[start:start+length])
         else:
-            byte_data = self.pe.__data__[start:start+length]
-
-        byte_string = ''
-        for c in byte_data:
-            byte_string += '%s ' % c.encode('hex')
-        return byte_string
+            try:
+                return self.pe.__data__[start:start+length].hex()
+            except AttributeError:
+                return ''.join(x.encode('hex') for x in self.pe.__data__[start:start+length])
 
     def scan_signatures(self, sigfile):
         """
@@ -702,7 +693,7 @@ class PFTriage(object):
             results.append(AnalysisResult(0, 'Checksum', "The checksum %x does not match %x " % (self.pe.OPTIONAL_HEADER.CheckSum, self.pe.generate_checksum())))
 
         if peutils.is_probably_packed(self.pe):
-            results.append(AnalysisResult(1, 'Packed', "Sample is probably packed"))
+            results.append(AnalysisResult(1, 'Packed', "Likely contains compressed or packed data."))
 
         if self.detect_overlay() > 0:
             results.append(AnalysisResult(1, 'Overlay', "Detected Overlay [%s]" % hex(self.detect_overlay())))
@@ -829,7 +820,7 @@ class PFTriage(object):
 
 
 
-        metadata['EP Bytes'] = self.getbytestring(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True)
+        metadata['EP Bytes'] = self.get_byte_string(self.pe.OPTIONAL_HEADER.AddressOfEntryPoint, 16, True)
 
         return metadata
 
@@ -846,7 +837,7 @@ class PFTriage(object):
         fobj += ' {:4}{:<16} {}\n'.format('', "Filename", self.filename)
         fobj += ' {:4}{:<16} {}\n'.format('', "Magic Type", self.magic_type(self.filename))
         fobj += ' {:4}{:<16} {}\n'.format('', "Size", self.filesize)
-        fobj += ' {:4}{:<16} {}\n\n'.format('', "First Bytes", self.getbytestring(0, 16))
+        fobj += ' {:4}{:<16} {}\n\n'.format('', "First Bytes", self.get_byte_string(0, 16))
         fobj += ' Hashes\n'
         fobj += ' {:4}{:<16} {}\n'.format('', "MD5", self.gethash('md5'))
         fobj += ' {:4}{:<16} {}\n'.format('', "SHA1", self.gethash('sha1'))
@@ -997,7 +988,6 @@ def print_resources(target, dumprva):
                         data += '{:12}'.format("{0:#0{1}x}".format(resentry.data.struct.CodePage, 10))
                         #data += '{:64}'.format(target.magic_type(target.extractdata(resentry.data.struct.OffsetToData,
                                                                                    #resentry.data.struct.Size)[:64], True))
-
                         if dumpaddress == 'ALL' or dumpaddress == offset:
                             data += '\n\n  Matched offset[%s] -- dumping resource' % dumpaddress
                             tmpdata = target.extractdata(resentry.data.struct.OffsetToData, resentry.data.struct.Size)
