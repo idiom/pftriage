@@ -1,3 +1,2 @@
 pefile
 file-magic
-ssdeep
